@@ -128,7 +128,7 @@ export async function learnerSessionAPI() {
 // --------------------------------------------------------
 
 export async function getLearnerProfileAPI() {
-  const data = await callAPI(`/gamification/${getLearnerPseudonymId()}/profile`, null, "GET");
+  const data = await callAPI(`/gamification/profile/${getLearnerPseudonymId()}`, null, "GET");
   return data;
 }
 

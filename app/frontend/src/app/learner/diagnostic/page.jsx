@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useLearner } from "../../../../context/LearnerContext";
-import { DiagnosticPanel } from "../../../../components/eduboost/FeaturePanels";
+import { useLearner } from "../../../context/LearnerContext";
+import { DiagnosticPanel } from "../../../components/eduboost/FeaturePanels";
 
 export default function DiagnosticPage() {
   const { learner, setMasteryData } = useLearner();

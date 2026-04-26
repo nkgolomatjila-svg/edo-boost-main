@@ -30,19 +30,20 @@ async def create_learner(request: LearnerCreateRequest, db=Depends(get_db)):
     learner_id = uuid4()
     async with AsyncSessionFactory() as session:
         try:
+            # Convert learning_style dict to JSON string
+            import json
+            style_json = json.dumps(request.learning_style)
             await session.execute(
                 text("""
                     INSERT INTO learners (learner_id, grade, home_language, avatar_id, learning_style)
-                    VALUES (:id, :grade, :lang, :avatar, :style::jsonb)
+                    VALUES (:id, :grade, :lang, :avatar, :style)
                 """),
                 {
                     "id": str(learner_id),
                     "grade": request.grade,
                     "lang": request.home_language,
                     "avatar": request.avatar_id,
-                    "style": request.model_dump_json(include={"learning_style"})
-                    .replace('{"learning_style":', "")
-                    .rstrip("}"),
+                    "style": style_json,
                 },
             )
             await session.commit()

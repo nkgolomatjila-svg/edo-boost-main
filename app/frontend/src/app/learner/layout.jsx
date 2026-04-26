@@ -2,8 +2,8 @@
 
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
-import { useLearner } from "../../../context/LearnerContext";
-import { Sidebar, BadgePopup } from "../../../components/eduboost/ShellComponents";
+import { useLearner } from "../../context/LearnerContext";
+import { Sidebar, BadgePopup } from "../../components/eduboost/ShellComponents";
 
 export default function LearnerLayout({ children }) {
   const { learner, setLearner, badge, setBadge } = useLearner();
