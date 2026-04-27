@@ -42,3 +42,22 @@ This report complements `audits/recommendations/Backend_Report.md` and `audits/r
 **Verified by**:
 - `pytest` full suite green (224 passed) in local venv.
 
+---
+
+### [2026-04-27] Dummy data generator: post-startup + persistence floor
+
+**Status**: Complete  
+**Commit**: `568c5d0`  
+
+**What changed**:
+- Added `DummyDataPoint` model for large-volume synthetic points.
+- Added `DummyDataService` to generate up to 10,000 points in the background after API startup.
+- Added a persistence floor by marking a subset as persistent and only cleaning up non-persistent points.
+- Added configuration knobs for enablement, target size, ratios, startup delay, and batch size.
+
+**Why**:
+- Enable silent, post-startup background population for demos/dev without impacting startup time.
+
+**Verified by**:
+- `pytest` full suite green (224 passed) after adding the dummy-data model + service.
+
