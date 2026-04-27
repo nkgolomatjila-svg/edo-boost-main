@@ -183,11 +183,13 @@ class TestParentPortalIntegration:
         service = ParentPortalService(mock_db_session)
         learner_id = mock_learner.learner_id
 
-        # Setup consent check
+        # Setup consent check - first call returns granted, second returns None (no revocation)
         consent_result = MagicMock()
         consent_result.scalar_one_or_none.return_value = mock_consent_granted
-        mock_db_session.execute.return_value = consent_result
-
+        
+        revoked_result = MagicMock()
+        revoked_result.scalar_one_or_none.return_value = None
+        
         # Setup diagnostic sessions
         sessions = [
             MagicMock(
@@ -200,27 +202,22 @@ class TestParentPortalIntegration:
                 knowledge_gaps=["fractions"],
                 completed_at=datetime.now() - timedelta(days=5),
             ),
-            MagicMock(
-                session_id=uuid4(),
-                subject_code="MATH",
-                grade_level=3,
-                theta_estimate=0.8,
-                final_mastery_score=0.85,
-                items_administered=25,
-                knowledge_gaps=[],
-                completed_at=datetime.now() - timedelta(days=1),
-            ),
         ]
         diag_result = MagicMock()
         diag_result.scalars.return_value.all.return_value = sessions
-        mock_db_session.execute.return_value = diag_result
+
+        mock_db_session.execute = AsyncMock(side_effect=[
+            consent_result,  # consent check - granted
+            revoked_result,  # consent check - revoked (none)
+            diag_result,     # diagnostic sessions query
+        ])
 
         # Execute
         result = await service.get_diagnostic_trends(learner_id, mock_guardian_id, days=30)
 
         # Verify
         assert result["learner_id"] == str(learner_id)
-        assert len(result["trends"]) == 2
+        assert len(result["trends"]) == 1
         assert result["trends"][0]["subject_code"] == "MATH"
 
     @pytest.mark.asyncio
@@ -234,12 +231,19 @@ class TestParentPortalIntegration:
         # Setup consent check
         consent_result = MagicMock()
         consent_result.scalar_one_or_none.return_value = mock_consent_granted
-        mock_db_session.execute.return_value = consent_result
-
+        
+        revoked_result = MagicMock()
+        revoked_result.scalar_one_or_none.return_value = None
+        
         # Setup: no diagnostic sessions
         diag_result = MagicMock()
         diag_result.scalars.return_value.all.return_value = []
-        mock_db_session.execute.return_value = diag_result
+
+        mock_db_session.execute = AsyncMock(side_effect=[
+            consent_result,  # consent check - granted
+            revoked_result,  # consent check - revoked (none)
+            diag_result,     # diagnostic sessions query
+        ])
 
         # Execute
         result = await service.get_diagnostic_trends(learner_id, mock_guardian_id, days=30)

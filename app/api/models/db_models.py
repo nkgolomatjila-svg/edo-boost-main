@@ -417,7 +417,8 @@ class ParentLearnerLink(Base):
     verified_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    parent = relationship("ParentAccount", back_populates="learner_links")
+    import sqlalchemy.orm as sa_orm
+    parent = sa_orm.relationship("ParentAccount", back_populates="learner_links")
 
     __table_args__ = (
         Index("ix_parent_learner_links_parent", "parent_id"),

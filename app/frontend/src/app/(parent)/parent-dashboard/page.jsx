@@ -1,9 +1,10 @@
 "use client";
 
+import React from "react";
 import { useRouter } from "next/navigation";
-import { ParentGateway } from "../../components/eduboost/EntryScreens";
+import { ParentGateway } from "../../../components/eduboost/EntryScreens";
 
-export default function ParentGatewayPage() {
+export default function ParentDashboardPage() {
   const router = useRouter();
 
   return (
