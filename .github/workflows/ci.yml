@@ -119,7 +119,7 @@ jobs:
       run: docker build -f docker/Dockerfile.api -t eduboost-api:ci .
 
     - name: Build Frontend Image
-      run: docker build -f docker/Dockerfile.frontend -t eduboost-frontend:ci .
+      run: docker build -f docker/Dockerfile.frontend -t eduboost-frontend:ci app/frontend
 
   # ── Frontend Tests ───────────────────────────────────────────────────────────
   frontend-test:
