@@ -10,6 +10,7 @@ import structlog
 
 from app.api.core.config import settings
 from app.api.routers import health, learners, lessons, diagnostic, study_plans, parent, auth, system, gamification, audit
+from app.api.routers import assessments
 
 log = structlog.get_logger()
 
@@ -107,7 +108,7 @@ from fastapi.responses import JSONResponse
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
         status_code=429,
-        content={"detail": {"error": "Rate limit exceeded", code: "RATE_LIMIT_EXCEEDED"}}
+        content={"detail": {"error": "Rate limit exceeded", "code": "RATE_LIMIT_EXCEEDED"}}
     )
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
@@ -128,4 +129,5 @@ app.include_router(study_plans.router, prefix="/api/v1/study-plans", tags=["Stud
 app.include_router(parent.router, prefix="/api/v1/parent", tags=["Parent Portal"])
 app.include_router(gamification.router, prefix="/api/v1/gamification", tags=["Gamification"])
 app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
+app.include_router(assessments.router, prefix="/api/v1/assessments", tags=["Assessments"])
 app.include_router(system.router, prefix="/api/v1/system", tags=["System"])

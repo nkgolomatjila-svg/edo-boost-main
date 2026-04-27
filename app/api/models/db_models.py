@@ -291,3 +291,135 @@ class AuditEvent(Base):
         Index("ix_audit_events_occurred", "occurred_at"),
         Index("ix_audit_events_type", "event_type"),
     )
+
+
+class Lesson(Base):
+    """CAPS-aligned lesson content for Grade R-7."""
+    __tablename__ = "lessons"
+
+    lesson_id = Column(String(50), primary_key=True)
+    title = Column(String(200), nullable=False)
+    subject_code = Column(String(20), nullable=False)
+    grade_level = Column(SmallInteger, nullable=False)
+    unit = Column(String(50))
+    topic = Column(String(100))
+    content = Column(Text, nullable=False)
+    content_modality = Column(String(20), default="text")  # text, video, interactive
+    duration_minutes = Column(SmallInteger, default=15)
+    difficulty_level = Column(Float, default=0.5)
+    learning_objectives = Column(JSON, default=[])
+    prerequisites = Column(JSON, default=[])
+    is_cap_aligned = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)
+    version = Column(Integer, default=1)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (
+        CheckConstraint("grade_level >= 0 AND grade_level <= 7", name="ck_lesson_grade"),
+        Index("ix_lessons_subject_grade", "subject_code", "grade_level"),
+        Index("ix_lessons_topic", "topic"),
+    )
+
+
+class Assessment(Base):
+    """Assessments / quizzes / tests for learners."""
+    __tablename__ = "assessments"
+
+    assessment_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    title = Column(String(200), nullable=False)
+    subject_code = Column(String(20), nullable=False)
+    grade_level = Column(SmallInteger, nullable=False)
+    assessment_type = Column(String(30), nullable=False)  # quiz, test, exam, diagnostic
+    total_marks = Column(Integer, default=0)
+    time_limit_minutes = Column(SmallInteger)
+    passing_score = Column(Float, default=0.5)
+    questions = Column(JSON, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    attempts = relationship("AssessmentAttempt", back_populates="assessment", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        CheckConstraint("grade_level >= 0 AND grade_level <= 7", name="ck_assessment_grade"),
+        Index("ix_assessments_subject_grade", "subject_code", "grade_level"),
+    )
+
+
+class AssessmentAttempt(Base):
+    """Learner attempts at an assessment."""
+    __tablename__ = "assessment_attempts"
+
+    attempt_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    learner_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id", ondelete="CASCADE"), nullable=False)
+    assessment_id = Column(UUID(as_uuid=True), ForeignKey("assessments.assessment_id", ondelete="CASCADE"), nullable=False)
+    score = Column(Float)
+    marks_obtained = Column(Integer)
+    time_taken_seconds = Column(Integer)
+    responses = Column(JSON, default=[])
+    started_at = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    assessment = relationship("Assessment", back_populates="attempts")
+
+    __table_args__ = (
+        Index("ix_assessment_attempts_learner", "learner_id"),
+        Index("ix_assessment_attempts_assessment", "assessment_id"),
+    )
+
+
+class Report(Base):
+    """Generated reports for learners and guardians."""
+    __tablename__ = "reports"
+
+    report_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    learner_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id", ondelete="CASCADE"), nullable=False)
+    report_type = Column(String(30), nullable=False)  # progress, diagnostic, weekly, monthly, parent
+    title = Column(String(200), nullable=False)
+    content = Column(JSON, nullable=False)
+    summary = Column(Text)
+    generated_by = Column(String(50), default="SYSTEM")  # SYSTEM, AI, ALGORITHM
+    is_shared = Column(Boolean, default=False)
+    shared_with_guardian = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_reports_learner", "learner_id"),
+        Index("ix_reports_type", "report_type"),
+    )
+
+
+class ParentAccount(Base):
+    """Guardian / parent accounts (PII encrypted)."""
+    __tablename__ = "parent_accounts"
+
+    parent_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email_encrypted = Column(Text, nullable=False)
+    password_hash = Column(String(200))
+    full_name_encrypted = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_verified = Column(Boolean, default=False)
+    last_login_at = Column(DateTime(timezone=True), nullable=True)
+
+    learner_links = relationship("ParentLearnerLink", back_populates="parent", cascade="all, delete-orphan")
+
+
+class ParentLearnerLink(Base):
+    """Many-to-many link between guardian accounts and learner profiles."""
+    __tablename__ = "parent_learner_links"
+
+    link_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    parent_id = Column(UUID(as_uuid=True), ForeignKey("parent_accounts.parent_id", ondelete="CASCADE"), nullable=False)
+    learner_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id", ondelete="CASCADE"), nullable=False)
+    relationship = Column(String(20), default="guardian")  # guardian, parent, grandparent
+    is_verified = Column(Boolean, default=False)
+    verified_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    parent = relationship("ParentAccount", back_populates="learner_links")
+
+    __table_args__ = (
+        Index("ix_parent_learner_links_parent", "parent_id"),
+        Index("ix_parent_learner_links_learner", "learner_id"),
+    )

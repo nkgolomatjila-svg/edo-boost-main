@@ -1,7 +1,10 @@
 """EduBoost SA — Lessons Router"""
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from typing import List, Optional
 
-from app.api.core.database import get_db
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy import text
+
+from app.api.core.database import AsyncSessionFactory, get_db
 from app.api.models.api_models import (
     CachedLessonResponse,
     ErrorResponse,
@@ -152,7 +155,7 @@ async def get_cache_stats():
     from app.api.services.lesson_service import get_lesson_cache
     
     cache = get_lesson_cache()
-    return {"cache": cache.stats()}
+    return {\"cache\": cache.stats()}
 
 
 @router.delete("/cache")
@@ -163,3 +166,86 @@ async def clear_cache():
     cache = get_lesson_cache()
     count = cache.clear()
     return {"cleared": count, "success": True}
+
+
+# ── Lesson Catalog (DB-backed) ────────────────────────────────────────────────
+
+@router.get(
+    "/catalog",
+    status_code=status.HTTP_200_OK,
+    summary="Browse the CAPS-aligned lesson catalog",
+)
+async def list_lesson_catalog(
+    subject_code: Optional[str] = Query(default=None, description="Filter by subject code (e.g. MATH, ENG, NS)"),
+    grade_level: Optional[int] = Query(default=None, ge=0, le=7, description="Filter by grade (0=Grade R)"),
+    topic: Optional[str] = Query(default=None, description="Filter by topic (partial match)"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+):
+    """Return paginated list of DB-backed lessons. Filterable by subject, grade, and topic."""
+    conditions = ["is_active = TRUE"]
+    params: dict = {"limit": limit, "offset": offset}
+
+    if subject_code:
+        conditions.append("subject_code = :subject_code")
+        params["subject_code"] = subject_code.upper()
+    if grade_level is not None:
+        conditions.append("grade_level = :grade_level")
+        params["grade_level"] = grade_level
+    if topic:
+        conditions.append("topic ILIKE :topic")
+        params["topic"] = f"%{topic}%"
+
+    where = " AND ".join(conditions)
+
+    async with AsyncSessionFactory() as session:
+        result = await session.execute(
+            text(
+                f"""
+                SELECT lesson_id, title, subject_code, grade_level, unit, topic,
+                       content_modality, duration_minutes, difficulty_level,
+                       learning_objectives, is_cap_aligned
+                FROM lessons
+                WHERE {where}
+                ORDER BY grade_level, subject_code, difficulty_level
+                LIMIT :limit OFFSET :offset
+                """
+            ),
+            params,
+        )
+        rows = [dict(r) for r in result.mappings().all()]
+
+        count_result = await session.execute(
+            text(f"SELECT COUNT(*) FROM lessons WHERE {where}"),
+            {k: v for k, v in params.items() if k not in ("limit", "offset")},
+        )
+        total = count_result.scalar()
+
+    return {"total": total, "offset": offset, "limit": limit, "lessons": rows}
+
+
+@router.get(
+    "/catalog/{lesson_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Fetch a single lesson from the catalog",
+    responses={404: {"model": ErrorResponse}},
+)
+async def get_catalog_lesson(lesson_id: str):
+    """Fetch full lesson content by lesson_id from the DB catalog."""
+    async with AsyncSessionFactory() as session:
+        result = await session.execute(
+            text("SELECT * FROM lessons WHERE lesson_id = :id AND is_active = TRUE"),
+            {"id": lesson_id},
+        )
+        row = result.mappings().first()
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse(
+                error="Lesson not found in catalog",
+                code="LESSON_CATALOG_NOT_FOUND",
+                details={"lesson_id": lesson_id},
+            ).model_dump(),
+        )
+    return dict(row)
