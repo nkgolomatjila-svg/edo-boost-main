@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import { Card } from "../../../components/ui/Card";
 import { Button } from "../../../components/ui/Button";
 import { AuthService } from "../../../lib/api/services";
+import { useLearner } from "../../../context/LearnerContext";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { setLearner } = useLearner();
   const [isParent, setIsParent] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -83,7 +85,19 @@ export default function LoginPage() {
         ) : (
           <div className="text-center py-4 text-gray-500 flex flex-col gap-3">
             <p>Learner login flow is under construction.</p>
-            <Button onClick={() => router.push("/dashboard")} variant="secondary" className="bg-green-50 text-green-700 border-green-200">
+            <Button 
+              onClick={() => {
+                setLearner({
+                  learner_id: "550e8400-e29b-41d4-a716-446655440000",
+                  nickname: "DevLearner",
+                  grade: 3,
+                  avatar: 0
+                });
+                router.push("/dashboard");
+              }} 
+              variant="secondary" 
+              className="bg-green-50 text-green-700 border-green-200"
+            >
               Bypass Login (Dev) →
             </Button>
           </div>
@@ -98,7 +112,15 @@ export default function LoginPage() {
 
       {isParent && (
         <div className="mt-4">
-          <Button onClick={() => router.push("/parent-dashboard")} variant="secondary" fullWidth className="bg-yellow-50 text-yellow-700 border-yellow-200">
+          <Button 
+            onClick={() => {
+              localStorage.setItem("guardian_token", "dev-token");
+              router.push("/parent-dashboard");
+            }} 
+            variant="secondary" 
+            fullWidth 
+            className="bg-yellow-50 text-yellow-700 border-yellow-200"
+          >
             Bypass Parent Login (Dev) →
           </Button>
         </div>

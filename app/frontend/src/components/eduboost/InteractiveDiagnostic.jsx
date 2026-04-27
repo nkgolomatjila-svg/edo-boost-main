@@ -47,19 +47,13 @@ export function InteractiveDiagnostic({ learner, onComplete, onBack }) {
     setLoading(true);
     const timeTaken = Date.now() - startTime;
     
-    // In a real app, we'd check if the answer is correct here or on backend
-    // Since this is a demo/adaptive engine, the backend handles correctness logic
-    // but for the UI we just assume some logic for now or let backend decide.
-    // Actually, the backend's /respond endpoint takes is_correct.
-    // In a production app, the backend should probably take the option index and verify.
-    // For this implementation, we'll simulate the correctness check based on a dummy correct answer.
-    
-    const isCorrect = Math.random() > 0.3; // Simulated for now
+    // Find the index of the selected option
+    const selectedIndex = currentItem.options.indexOf(option);
 
     try {
       const res = await DiagnosticService.submitResponse(session, {
         item_id: currentItem.item_id,
-        is_correct: isCorrect,
+        selected_index: selectedIndex,
         time_on_task_ms: timeTaken,
       });
 
@@ -87,12 +81,12 @@ export function InteractiveDiagnostic({ learner, onComplete, onBack }) {
         </div>
 
         <div className="bg-blue-50 p-6 rounded-xl mb-8">
-          <h3 className="font-bold text-blue-800 mb-4">Your Mastery: {Math.round(gap_report?.mastery_score * 100)}%</h3>
+          <h3 className="font-bold text-blue-800 mb-4">Your Mastery: {Math.round(gapReport?.mastery_score * 100)}%</h3>
           <div className="space-y-4">
             <div>
               <p className="text-sm font-bold text-blue-700 mb-1">Identified Gaps:</p>
               <div className="flex flex-wrap gap-2">
-                {gap_report?.knowledge_gaps?.map((gap, i) => (
+                {gapReport?.knowledge_gaps?.map((gap, i) => (
                   <span key={i} className="bg-white px-3 py-1 rounded-full text-xs font-medium border border-blue-200">
                     {gap.subject}: {gap.gap_grade < learner.grade ? `Grade ${gap.gap_grade} Level` : "Focus Area"}
                   </span>
@@ -102,7 +96,7 @@ export function InteractiveDiagnostic({ learner, onComplete, onBack }) {
           </div>
         </div>
 
-        <Button onClick={() => onComplete(subject, Math.round(gap_report?.mastery_score * 100))} fullWidth className="py-4">
+        <Button onClick={() => onComplete(subject, Math.round(gapReport?.mastery_score * 100))} fullWidth className="py-4">
           View My New Study Plan →
         </Button>
       </Card>

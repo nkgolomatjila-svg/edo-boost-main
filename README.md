@@ -41,9 +41,10 @@ eduboost-sa/
 │   │   ├── judiciary.py              # Policy / validation layer
 │   │   ├── fourth_estate.py          # Audit/event support
 │   │   └── profiler.py               # Profiling helpers
-│   └── frontend/                     # Next.js frontend
-│       ├── src/app/                  # App router entrypoints
-│       ├── src/components/           # UI components (currently still monolithic)
+│   └── frontend/                     # Next.js frontend (App Router)
+│       ├── src/app/                  # Individual feature pages (dashboard, lesson, diagnostic, etc.)
+│       ├── src/components/eduboost/   # Specialized UI components
+│       ├── src/lib/api/              # Production-grade service layer
 │       └── package.json
 ├── docker/                           # Dockerfiles
 ├── grafana/                          # Grafana provisioning
@@ -72,7 +73,7 @@ The current codebase already includes:
 
 Known gaps still being addressed:
 
-- frontend feature coverage is still being completed and hardened (learner + guardian journeys)
+- frontend is fully modularized with App Router; focus is now on high-fidelity UI and strict E2E testing
 - database lifecycle and migrations are in transition to an Alembic-driven workflow; drift prevention remains a key focus
 - authentication, consent, deletion, and audit guarantees exist but still need deeper end-to-end validation coverage
 - CI/CD and release automation are present but still evolving toward production promotion gates and runbooks

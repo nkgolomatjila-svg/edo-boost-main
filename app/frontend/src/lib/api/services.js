@@ -27,6 +27,20 @@ export const LearnerService = {
     fetchApi(`/gamification/learner/${learnerId}/profile`),
 
   getStudyPlan: (learnerId) => fetchApi(`/study-plans/${learnerId}`),
+  
+  getMastery: (learnerId) => fetchApi(`/learners/${learnerId}/mastery`),
+
+  generateLesson: (data) =>
+    fetchApi("/lessons/generate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  awardXP: (data) =>
+    fetchApi("/gamification/award-xp", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 export const ParentService = {

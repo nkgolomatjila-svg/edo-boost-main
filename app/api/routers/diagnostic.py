@@ -258,7 +258,18 @@ async def start_diagnostic(request: DiagnosticRequest):
 async def submit_diagnostic_response(session_id: uuid.UUID, request: DiagnosticSubmitRequest):
     """Submit a response to the current item and get the next one."""
     from app.api.orchestrator import OrchestratorRequest, get_orchestrator
- 
+    from app.api.ml.irt_engine import ITEM_BANK
+
+    # Evaluate correctness on backend if selected_index is provided
+    is_correct = request.is_correct
+    if request.selected_index is not None:
+        item = ITEM_BANK.get(request.item_id)
+        if item:
+            is_correct = (item.correct_index == request.selected_index)
+    
+    if is_correct is None:
+        raise HTTPException(status_code=400, detail="Either is_correct or selected_index must be provided")
+
     async with AsyncSessionFactory() as session:
         result = await session.execute(
             text("SELECT * FROM diagnostic_sessions WHERE session_id = :session_id"),
@@ -289,7 +300,7 @@ async def submit_diagnostic_response(session_id: uuid.UUID, request: DiagnosticS
             params={
                 "subject_code": session_row["subject_code"],
                 "item_id": request.item_id,
-                "is_correct": request.is_correct,
+                "is_correct": is_correct,
                 "time_on_task_ms": request.time_on_task_ms,
                 "previous_responses": previous_responses,
                 "theta": session_row["theta_estimate"],
@@ -318,8 +329,8 @@ async def submit_diagnostic_response(session_id: uuid.UUID, request: DiagnosticS
                 "response_id": uuid.uuid4(),
                 "session_id": session_id,
                 "item_id": request.item_id,
-                "learner_response": "correct" if request.is_correct else "incorrect",
-                "is_correct": request.is_correct,
+                "learner_response": "correct" if is_correct else "incorrect",
+                "is_correct": is_correct,
                 "time_taken_ms": request.time_on_task_ms,
                 "theta_before": session_row["theta_estimate"],
                 "theta_after": state["theta"],

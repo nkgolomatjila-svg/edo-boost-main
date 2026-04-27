@@ -106,7 +106,8 @@ class DiagnosticStartResponse(StrictSchema):
 
 class DiagnosticSubmitRequest(StrictSchema):
     item_id: str
-    is_correct: bool
+    selected_index: int | None = None
+    is_correct: bool | None = None
     time_on_task_ms: int
 
 
