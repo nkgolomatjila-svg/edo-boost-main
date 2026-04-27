@@ -8,10 +8,13 @@ import uuid
 from datetime import datetime, timedelta
 from uuid import UUID
 
+import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.models.db_models import Learner, StudyPlan, SubjectMastery
+
+log = structlog.get_logger()
 
 CAPS_SUBJECTS = {
     "MATH": {"name": "Mathematics", "weekly_hours": 6},

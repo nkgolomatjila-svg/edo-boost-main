@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 import structlog
 
 from app.api.core.config import settings
+from app.api.core.database import init_test_schema
 from app.api.routers import health, learners, lessons, diagnostic, study_plans, parent, auth, system, gamification, audit
 from app.api.routers import assessments
 
@@ -62,7 +63,11 @@ class RateLimitMiddleware:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("EduBoost SA API starting", env=settings.APP_ENV)
-    log.info("DB schema management is migration-driven; runtime auto-create is disabled")
+    if settings.APP_ENV == "test":
+        # Enable sqlite-backed, dockerless integration tests.
+        await init_test_schema()
+    else:
+        log.info("DB schema management is migration-driven; runtime auto-create is disabled")
     yield
     log.info("EduBoost SA API shutting down")
 

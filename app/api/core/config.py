@@ -2,6 +2,8 @@
 EduBoost SA — Application Configuration
 All settings loaded from environment variables via Pydantic Settings
 """
+import os
+import sys
 from functools import lru_cache
 from typing import List
 
@@ -15,12 +17,21 @@ _PLACEHOLDER_SECRETS = {
     "devpassword",
 }
 
+_RUNNING_UNDER_PYTEST = bool(os.getenv("PYTEST_CURRENT_TEST")) or any("pytest" in arg for arg in sys.argv)
+_DEFAULT_APP_ENV = "test" if _RUNNING_UNDER_PYTEST else "development"
+_DEFAULT_DATABASE_URL = (
+    "sqlite+aiosqlite:///./.eduboost_test.db"
+    if _RUNNING_UNDER_PYTEST
+    else "postgresql+asyncpg://eduboost_user:devpassword@localhost:5432/eduboost"
+)
+_ENV_FILE = None if _RUNNING_UNDER_PYTEST else ".env"
+
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILE, env_file_encoding="utf-8", extra="ignore")
 
     # Application
-    APP_ENV: str = "development"
+    APP_ENV: str = _DEFAULT_APP_ENV
     APP_NAME: str = "EduBoost SA"
     APP_VERSION: str = "1.0.0"
     APP_PORT: int = 8000
@@ -29,7 +40,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://eduboost_user:devpassword@localhost:5432/eduboost"
+    DATABASE_URL: str = _DEFAULT_DATABASE_URL
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
     POSTGRES_DB: str = "eduboost"

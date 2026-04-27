@@ -4,8 +4,9 @@ import random
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.models.api_models import (
     DiagnosticItemsResponse,
@@ -18,7 +19,7 @@ from app.api.models.api_models import (
     DiagnosticSubmitResponse,
     ErrorResponse,
 )
-from app.api.core.database import AsyncSessionFactory
+from app.api.core.database import AsyncSessionFactory, get_db
 
 router = APIRouter()
 
@@ -113,8 +114,10 @@ async def run_diagnostic(request: DiagnosticRequest):
     """
     from app.api.orchestrator import OrchestratorRequest, get_orchestrator
 
+    from app.api.ml.irt_engine import SubjectCode
+
     try:
-        subject_code = request.subject_code
+        SubjectCode(request.subject_code)
     except ValueError as e:
         raise HTTPException(
             status_code=400,
@@ -402,10 +405,9 @@ async def get_diagnostic_items(subject_code: str, grade: int):
 
 
 @router.get("/history/{learner_id}")
-async def get_diagnostic_history(learner_id: uuid.UUID):
+async def get_diagnostic_history(learner_id: uuid.UUID, session: AsyncSession = Depends(get_db)):
     """Get diagnostic session history for a learner."""
-    async with AsyncSessionFactory() as session:
-        result = await session.execute(
+    result = await session.execute(
             text("""
                 SELECT session_id, subject_code, grade_level, status, theta_estimate,
                        standard_error, items_administered, final_mastery_score, 
@@ -415,10 +417,10 @@ async def get_diagnostic_history(learner_id: uuid.UUID):
                 ORDER BY started_at DESC
                 LIMIT 50
             """),
-            {"learner_id": learner_id},
+            {"learner_id": str(learner_id)},
         )
-        rows = result.fetchall()
-        
+    rows = result.fetchall()
+
     sessions = []
     for row in rows:
         sessions.append({

@@ -2,16 +2,17 @@
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, status, Query
-from pydantic import BaseModel, Field
+from pydantic import Field
 
 from app.api.models.api_models import CurrentStudyPlanResponse, ErrorResponse, StudyPlanGenerationResponse
+from app.api.models.api_models import StrictSchema
 from app.api.services.study_plan_service import StudyPlanService
 from app.api.core.database import AsyncSessionFactory
 
 router = APIRouter()
 
 
-class StudyPlanRequest(BaseModel):
+class StudyPlanRequest(StrictSchema):
     learner_id: UUID
     grade: int = Field(ge=0, le=7)
     knowledge_gaps: list = Field(default_factory=list)
