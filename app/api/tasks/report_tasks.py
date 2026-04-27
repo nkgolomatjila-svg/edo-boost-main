@@ -1,4 +1,5 @@
 """Celery background tasks for automated parent report generation."""
+
 import asyncio
 
 from celery.utils.log import get_task_logger
@@ -54,6 +55,7 @@ async def _generate_all_reports() -> int:
             async with AsyncSessionFactory() as session:
                 from app.api.services.parent_portal_service import ParentPortalService
                 import uuid
+
                 service = ParentPortalService(session)
                 await service.generate_parent_report(
                     learner_id=uuid.UUID(learner_id),
@@ -61,6 +63,8 @@ async def _generate_all_reports() -> int:
                 )
                 generated += 1
         except Exception as e:
-            logger.error(f"Report generation failed for parent={parent_id} learner={learner_id}: {e}")
+            logger.error(
+                f"Report generation failed for parent={parent_id} learner={learner_id}: {e}"
+            )
 
     return generated

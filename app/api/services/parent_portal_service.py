@@ -4,6 +4,7 @@ EduBoost SA — Parent Portal Service
 Provides progress summaries, diagnostic trends, study plan adherence,
 and AI-assisted parent reports with clear, explainable language.
 """
+
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -43,13 +44,17 @@ class ParentPortalService:
             return result
         return await self.session.execute(stmt)
 
-    async def get_learner_progress_summary(self, learner_id: UUID, guardian_id: UUID) -> dict:
+    async def get_learner_progress_summary(
+        self, learner_id: UUID, guardian_id: UUID
+    ) -> dict:
         await self._verify_guardian_access(learner_id, guardian_id)
         learner = await self.session.get(Learner, learner_id)
         if not learner:
             raise ValueError(f"Learner {learner_id} not found")
 
-        result = await self._execute(select(SubjectMastery).where(SubjectMastery.learner_id == learner_id))
+        result = await self._execute(
+            select(SubjectMastery).where(SubjectMastery.learner_id == learner_id)
+        )
         subject_mastery = result.scalars().all()
         subjects = [
             {
@@ -57,11 +62,15 @@ class ParentPortalService:
                 "mastery_score": sm.mastery_score,
                 "concepts_mastered": len(sm.concepts_mastered or []),
                 "knowledge_gaps": sm.knowledge_gaps or [],
-                "last_assessed": sm.last_assessed_at.isoformat() if sm.last_assessed_at else None,
+                "last_assessed": sm.last_assessed_at.isoformat()
+                if sm.last_assessed_at
+                else None,
             }
             for sm in subject_mastery
         ]
-        avg_mastery = sum(s["mastery_score"] for s in subjects) / len(subjects) if subjects else 0
+        avg_mastery = (
+            sum(s["mastery_score"] for s in subjects) / len(subjects) if subjects else 0
+        )
         return {
             "learner_id": str(learner_id),
             "guardian_id": str(guardian_id),
@@ -71,15 +80,22 @@ class ParentPortalService:
             "streak_days": learner.streak_days,
             "total_xp": learner.total_xp,
             "subjects": subjects,
-            "last_active": learner.last_active_at.isoformat() if learner.last_active_at else None,
+            "last_active": learner.last_active_at.isoformat()
+            if learner.last_active_at
+            else None,
         }
 
-    async def get_diagnostic_trends(self, learner_id: UUID, guardian_id: UUID, days: int = 30) -> dict:
+    async def get_diagnostic_trends(
+        self, learner_id: UUID, guardian_id: UUID, days: int = 30
+    ) -> dict:
         await self._verify_guardian_access(learner_id, guardian_id)
         cutoff_date = datetime.now() - timedelta(days=days)
         result = await self._execute(
             select(DiagnosticSession)
-            .where(DiagnosticSession.learner_id == learner_id, DiagnosticSession.completed_at >= cutoff_date)
+            .where(
+                DiagnosticSession.learner_id == learner_id,
+                DiagnosticSession.completed_at >= cutoff_date,
+            )
             .order_by(DiagnosticSession.started_at)
         )
         sessions = result.scalars().all()
@@ -92,7 +108,9 @@ class ParentPortalService:
                 "mastery_score": session.final_mastery_score,
                 "items_administered": session.items_administered,
                 "knowledge_gaps": session.knowledge_gaps or [],
-                "completed_at": session.completed_at.isoformat() if session.completed_at else None,
+                "completed_at": session.completed_at.isoformat()
+                if session.completed_at
+                else None,
             }
             for session in sessions
         ]
@@ -110,18 +128,30 @@ class ParentPortalService:
             "improvement": improvement,
         }
 
-    async def get_study_plan_adherence(self, learner_id: UUID, guardian_id: UUID) -> dict:
+    async def get_study_plan_adherence(
+        self, learner_id: UUID, guardian_id: UUID
+    ) -> dict:
         result = await self._execute(
-            select(StudyPlan).where(StudyPlan.learner_id == learner_id).order_by(StudyPlan.created_at.desc()).limit(1)
+            select(StudyPlan)
+            .where(StudyPlan.learner_id == learner_id)
+            .order_by(StudyPlan.created_at.desc())
+            .limit(1)
         )
         plan = result.scalar_one_or_none()
         if not plan:
-            return {"learner_id": str(learner_id), "has_active_plan": False, "message": "No study plan currently active"}
+            return {
+                "learner_id": str(learner_id),
+                "has_active_plan": False,
+                "message": "No study plan currently active",
+            }
 
         await self._verify_guardian_access(learner_id, guardian_id)
 
         # Legacy/test support: if plan exposes explicit adherence fields, surface them.
-        if hasattr(plan, "adherence_percentage") and getattr(plan, "adherence_percentage") is not None:
+        if (
+            hasattr(plan, "adherence_percentage")
+            and getattr(plan, "adherence_percentage") is not None
+        ):
             return {
                 "learner_id": str(learner_id),
                 "has_active_plan": True,
@@ -132,13 +162,20 @@ class ParentPortalService:
             }
 
         result = await self._execute(
-            select(SessionEvent).where(SessionEvent.learner_id == learner_id, SessionEvent.occurred_at >= plan.week_start)
+            select(SessionEvent).where(
+                SessionEvent.learner_id == learner_id,
+                SessionEvent.occurred_at >= plan.week_start,
+            )
         )
         events = result.scalars().all()
         schedule = plan.schedule or {}
         total_planned = sum(len(tasks) for tasks in schedule.values())
-        completed_tasks = len([e for e in events if (e.event_type or "").lower() == "lesson_complete"])
-        adherence_rate = (completed_tasks / total_planned * 100) if total_planned > 0 else 0
+        completed_tasks = len(
+            [e for e in events if (e.event_type or "").lower() == "lesson_complete"]
+        )
+        adherence_rate = (
+            (completed_tasks / total_planned * 100) if total_planned > 0 else 0
+        )
         return {
             "learner_id": str(learner_id),
             "has_active_plan": True,
@@ -168,25 +205,36 @@ class ParentPortalService:
         else:
             status, emoji = "needs additional support", "💪"
 
-        report_sections.append({
-            "section": "overall_summary",
-            "title": "Overall Progress",
-            "content": f"{emoji} Your child is {status} in their learning journey. They have achieved {mastery_pct}% overall mastery across {len(progress['subjects'])} subjects.",
-        })
+        report_sections.append(
+            {
+                "section": "overall_summary",
+                "title": "Overall Progress",
+                "content": f"{emoji} Your child is {status} in their learning journey. They have achieved {mastery_pct}% overall mastery across {len(progress['subjects'])} subjects.",
+            }
+        )
 
-        subject_lines = [f"- **{subject['subject_code']}**: {int((subject['mastery_score'] or 0) * 100)}% mastery" for subject in progress["subjects"]]
-        report_sections.append({
-            "section": "subject_breakdown",
-            "title": "Subject Performance",
-            "content": "\n".join(subject_lines) if subject_lines else "No subject data available yet.",
-        })
+        subject_lines = [
+            f"- **{subject['subject_code']}**: {int((subject['mastery_score'] or 0) * 100)}% mastery"
+            for subject in progress["subjects"]
+        ]
+        report_sections.append(
+            {
+                "section": "subject_breakdown",
+                "title": "Subject Performance",
+                "content": "\n".join(subject_lines)
+                if subject_lines
+                else "No subject data available yet.",
+            }
+        )
 
         if progress["streak_days"] > 0:
-            report_sections.append({
-                "section": "engagement",
-                "title": "Learning Streak",
-                "content": f"🔥 Your child has a {progress['streak_days']}-day learning streak! They've earned {progress['total_xp']} XP total.",
-            })
+            report_sections.append(
+                {
+                    "section": "engagement",
+                    "title": "Learning Streak",
+                    "content": f"🔥 Your child has a {progress['streak_days']}-day learning streak! They've earned {progress['total_xp']} XP total.",
+                }
+            )
 
         if trends["sessions_count"] > 0:
             improvement = trends["improvement"]
@@ -196,7 +244,13 @@ class ParentPortalService:
                 trend_msg = f"Diagnostic assessments show a {int(abs(improvement) * 100)}% decrease over the past {trends['period_days']} days. Consider reviewing the study plan."
             else:
                 trend_msg = "Diagnostic assessments show stable performance."
-            report_sections.append({"section": "diagnostics", "title": "Assessment Trends", "content": trend_msg})
+            report_sections.append(
+                {
+                    "section": "diagnostics",
+                    "title": "Assessment Trends",
+                    "content": trend_msg,
+                }
+            )
 
         if adherence["has_active_plan"]:
             rate_value = adherence.get("adherence_rate")
@@ -209,21 +263,35 @@ class ParentPortalService:
                 adherence_msg = f"Your child has completed {rate}% of their planned tasks. Encouraging consistent study habits will help."
             else:
                 adherence_msg = f"Your child has completed {rate}% of planned tasks. Let's work together to build better study routines."
-            report_sections.append({
-                "section": "study_plan",
-                "title": "This Week's Study Plan",
-                "content": f"{adherence_msg}\n\nFocus areas: {adherence.get('week_focus', 'General review')}",
-            })
+            report_sections.append(
+                {
+                    "section": "study_plan",
+                    "title": "This Week's Study Plan",
+                    "content": f"{adherence_msg}\n\nFocus areas: {adherence.get('week_focus', 'General review')}",
+                }
+            )
 
         recommendations = []
         if mastery_pct < 50:
-            recommendations.append("Consider scheduling extra practice sessions in weaker subjects.")
+            recommendations.append(
+                "Consider scheduling extra practice sessions in weaker subjects."
+            )
         if progress["streak_days"] < 3:
-            recommendations.append("Encourage daily learning to build a streak and reinforce habits.")
+            recommendations.append(
+                "Encourage daily learning to build a streak and reinforce habits."
+            )
         if adherence.get("has_active_plan") and adherence.get("adherence_rate", 0) < 50:
-            recommendations.append("Review the study plan together and adjust if needed.")
+            recommendations.append(
+                "Review the study plan together and adjust if needed."
+            )
         if recommendations:
-            report_sections.append({"section": "recommendations", "title": "Recommendations", "content": "\n".join(f"- {r}" for r in recommendations)})
+            report_sections.append(
+                {
+                    "section": "recommendations",
+                    "title": "Recommendations",
+                    "content": "\n".join(f"- {r}" for r in recommendations),
+                }
+            )
 
         # Backwards-compatible envelope for tests/clients.
         return {
@@ -231,13 +299,19 @@ class ParentPortalService:
             "report_date": datetime.now().isoformat(),
             "report": {
                 "overall_mastery": mastery_pct,
-                "strengths": [s["subject_code"] for s in progress["subjects"] if (s.get("mastery_score") or 0) >= 0.7],
+                "strengths": [
+                    s["subject_code"]
+                    for s in progress["subjects"]
+                    if (s.get("mastery_score") or 0) >= 0.7
+                ],
                 "recommendations": recommendations,
                 "sections": report_sections,
             },
         }
 
-    async def _verify_guardian_access(self, learner_id: UUID, guardian_id: UUID) -> None:
+    async def _verify_guardian_access(
+        self, learner_id: UUID, guardian_id: UUID
+    ) -> None:
         """Verify guardian has access to learner data via link or consent."""
         # Tests frequently inject an AsyncMock session and only configure the queries they care about.
         # If execute() isn't using side_effect, treat access checks as already handled by the test.
@@ -252,7 +326,10 @@ class ParentPortalService:
                 # side_effect is configured: tests expect consent checks only (no link-table query).
                 result = await self._execute(
                     select(ConsentAudit)
-                    .where(ConsentAudit.pseudonym_id == learner_id, ConsentAudit.event_type == "consent_granted")
+                    .where(
+                        ConsentAudit.pseudonym_id == learner_id,
+                        ConsentAudit.event_type == "consent_granted",
+                    )
                     .order_by(ConsentAudit.occurred_at.desc())
                     .limit(1)
                 )
@@ -264,25 +341,38 @@ class ParentPortalService:
                 # If the next execute result is NOT a revoked-consent record, stash it for the next query.
                 result = await self._execute(
                     select(ConsentAudit)
-                    .where(ConsentAudit.pseudonym_id == learner_id, ConsentAudit.event_type == "consent_revoked")
+                    .where(
+                        ConsentAudit.pseudonym_id == learner_id,
+                        ConsentAudit.event_type == "consent_revoked",
+                    )
                     .order_by(ConsentAudit.occurred_at.desc())
                     .limit(1)
                 )
                 revoked = result.scalar_one_or_none()
-                if revoked is not None and getattr(revoked, "event_type", None) != "consent_revoked":
+                if (
+                    revoked is not None
+                    and getattr(revoked, "event_type", None) != "consent_revoked"
+                ):
                     self._prefetched_execute_result = result
                     revoked = None
 
                 revoked_at = getattr(revoked, "occurred_at", None)
                 consent_at = getattr(consent, "occurred_at", None)
-                if isinstance(revoked_at, datetime) and isinstance(consent_at, datetime) and revoked_at > consent_at:
+                if (
+                    isinstance(revoked_at, datetime)
+                    and isinstance(consent_at, datetime)
+                    and revoked_at > consent_at
+                ):
                     raise ValueError("Guardian consent has been revoked")
                 return
 
             # No side_effect: do a minimal consent check based on the configured return_value.
             result = await self._execute(
                 select(ConsentAudit)
-                .where(ConsentAudit.pseudonym_id == learner_id, ConsentAudit.event_type == "consent_granted")
+                .where(
+                    ConsentAudit.pseudonym_id == learner_id,
+                    ConsentAudit.event_type == "consent_granted",
+                )
                 .order_by(ConsentAudit.occurred_at.desc())
                 .limit(1)
             )
@@ -305,7 +395,10 @@ class ParentPortalService:
         # 2. Fallback: legacy consent audit check
         result = await self.session.execute(
             select(ConsentAudit)
-            .where(ConsentAudit.pseudonym_id == learner_id, ConsentAudit.event_type == "consent_granted")
+            .where(
+                ConsentAudit.pseudonym_id == learner_id,
+                ConsentAudit.event_type == "consent_granted",
+            )
             .order_by(ConsentAudit.occurred_at.desc())
             .limit(1)
         )
@@ -315,14 +408,21 @@ class ParentPortalService:
 
         result = await self.session.execute(
             select(ConsentAudit)
-            .where(ConsentAudit.pseudonym_id == learner_id, ConsentAudit.event_type == "consent_revoked")
+            .where(
+                ConsentAudit.pseudonym_id == learner_id,
+                ConsentAudit.event_type == "consent_revoked",
+            )
             .order_by(ConsentAudit.occurred_at.desc())
             .limit(1)
         )
         revoked = result.scalar_one_or_none()
         revoked_at = getattr(revoked, "occurred_at", None)
         consent_at = getattr(consent, "occurred_at", None)
-        if isinstance(revoked_at, datetime) and isinstance(consent_at, datetime) and revoked_at > consent_at:
+        if (
+            isinstance(revoked_at, datetime)
+            and isinstance(consent_at, datetime)
+            and revoked_at > consent_at
+        ):
             raise ValueError("Guardian consent has been revoked")
 
     async def export_data(self, learner_id: UUID, guardian_id: UUID) -> dict:
@@ -331,18 +431,38 @@ class ParentPortalService:
         if not learner:
             raise ValueError(f"Learner {learner_id} not found")
 
-        result = await self._execute(select(LearnerIdentity).where(LearnerIdentity.pseudonym_id == learner_id))
+        result = await self._execute(
+            select(LearnerIdentity).where(LearnerIdentity.pseudonym_id == learner_id)
+        )
         learner_identity = result.scalar_one_or_none()
 
-        result = await self._execute(select(SubjectMastery).where(SubjectMastery.learner_id == learner_id))
+        result = await self._execute(
+            select(SubjectMastery).where(SubjectMastery.learner_id == learner_id)
+        )
         subject_mastery_records = result.scalars().all()
-        result = await self._execute(select(SessionEvent).where(SessionEvent.learner_id == learner_id).order_by(SessionEvent.occurred_at.desc()))
+        result = await self._execute(
+            select(SessionEvent)
+            .where(SessionEvent.learner_id == learner_id)
+            .order_by(SessionEvent.occurred_at.desc())
+        )
         session_events = result.scalars().all()
-        result = await self._execute(select(DiagnosticSession).where(DiagnosticSession.learner_id == learner_id).order_by(DiagnosticSession.completed_at.desc()))
+        result = await self._execute(
+            select(DiagnosticSession)
+            .where(DiagnosticSession.learner_id == learner_id)
+            .order_by(DiagnosticSession.completed_at.desc())
+        )
         diagnostic_sessions = result.scalars().all()
-        result = await self._execute(select(StudyPlan).where(StudyPlan.learner_id == learner_id).order_by(StudyPlan.created_at.desc()))
+        result = await self._execute(
+            select(StudyPlan)
+            .where(StudyPlan.learner_id == learner_id)
+            .order_by(StudyPlan.created_at.desc())
+        )
         study_plans = result.scalars().all()
-        result = await self._execute(select(ConsentAudit).where(ConsentAudit.pseudonym_id == learner_id).order_by(ConsentAudit.occurred_at.desc()))
+        result = await self._execute(
+            select(ConsentAudit)
+            .where(ConsentAudit.pseudonym_id == learner_id)
+            .order_by(ConsentAudit.occurred_at.desc())
+        )
         consent_records = result.scalars().all()
 
         return {
@@ -359,8 +479,12 @@ class ParentPortalService:
                 "overall_mastery": learner.overall_mastery,
                 "streak_days": learner.streak_days,
                 "total_xp": learner.total_xp,
-                "created_at": learner.created_at.isoformat() if learner.created_at else None,
-                "last_active_at": learner.last_active_at.isoformat() if learner.last_active_at else None,
+                "created_at": learner.created_at.isoformat()
+                if learner.created_at
+                else None,
+                "last_active_at": learner.last_active_at.isoformat()
+                if learner.last_active_at
+                else None,
             },
             "subject_mastery": [
                 {
@@ -370,7 +494,9 @@ class ParentPortalService:
                     "concepts_mastered": sm.concepts_mastered or [],
                     "concepts_in_progress": sm.concepts_in_progress or [],
                     "knowledge_gaps": sm.knowledge_gaps or [],
-                    "last_assessed_at": sm.last_assessed_at.isoformat() if sm.last_assessed_at else None,
+                    "last_assessed_at": sm.last_assessed_at.isoformat()
+                    if sm.last_assessed_at
+                    else None,
                     "updated_at": sm.updated_at.isoformat() if sm.updated_at else None,
                 }
                 for sm in subject_mastery_records
@@ -387,7 +513,9 @@ class ParentPortalService:
                     "difficulty_level": se.difficulty_level,
                     "post_mastery_delta": se.post_mastery_delta,
                     "lesson_efficacy_score": se.lesson_efficacy_score,
-                    "occurred_at": se.occurred_at.isoformat() if se.occurred_at else None,
+                    "occurred_at": se.occurred_at.isoformat()
+                    if se.occurred_at
+                    else None,
                 }
                 for se in session_events
             ],
@@ -402,7 +530,9 @@ class ParentPortalService:
                     "items_administered": ds.items_administered,
                     "knowledge_gaps": ds.knowledge_gaps or [],
                     "started_at": ds.started_at.isoformat() if ds.started_at else None,
-                    "completed_at": ds.completed_at.isoformat() if ds.completed_at else None,
+                    "completed_at": ds.completed_at.isoformat()
+                    if ds.completed_at
+                    else None,
                 }
                 for ds in diagnostic_sessions
             ],
@@ -422,7 +552,9 @@ class ParentPortalService:
                 {
                     "event_type": ca.event_type,
                     "consent_version": getattr(ca, "consent_version", None),
-                    "occurred_at": ca.occurred_at.isoformat() if ca.occurred_at else None,
+                    "occurred_at": ca.occurred_at.isoformat()
+                    if ca.occurred_at
+                    else None,
                 }
                 for ca in consent_records
             ],

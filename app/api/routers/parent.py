@@ -1,4 +1,5 @@
 """EduBoost SA — Parent Portal Router."""
+
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -21,9 +22,12 @@ from app.api.services.popia_deletion_service import PopiaDeletionService
 
 router = APIRouter()
 
+
 async def require_guardian(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") != "guardian":
-        raise HTTPException(status_code=403, detail="This endpoint requires the 'guardian' role")
+        raise HTTPException(
+            status_code=403, detail="This endpoint requires the 'guardian' role"
+        )
     return user
 
 
@@ -40,25 +44,37 @@ class DeletionRequest(BaseModel):
     reason: Optional[str] = None
 
 
-@router.get("/{learner_id}/progress/{guardian_id}", response_model=LearnerProgressResponse)
-async def get_learner_progress(learner_id: UUID, guardian_id: UUID, _user: dict = Depends(require_guardian)):
+@router.get(
+    "/{learner_id}/progress/{guardian_id}", response_model=LearnerProgressResponse
+)
+async def get_learner_progress(
+    learner_id: UUID, guardian_id: UUID, _user: dict = Depends(require_guardian)
+):
     """Get learner progress summary for parent portal."""
     async with AsyncSessionFactory() as session:
         try:
             service = ParentPortalService(session)
-            progress = await service.get_learner_progress_summary(learner_id, guardian_id)
+            progress = await service.get_learner_progress_summary(
+                learner_id, guardian_id
+            )
             return LearnerProgressResponse(success=True, progress=progress)
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to get progress: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Failed to get progress: {e}"
+            ) from e
 
 
 # Backwards-compatible alias (some tests/clients use guardian-first ordering)
-@router.get("/{guardian_id}/progress/{learner_id}", response_model=LearnerProgressResponse)
-async def get_learner_progress_guardian_first(guardian_id: UUID, learner_id: UUID, _user: dict = Depends(require_guardian)):
+@router.get(
+    "/{guardian_id}/progress/{learner_id}", response_model=LearnerProgressResponse
+)
+async def get_learner_progress_guardian_first(
+    guardian_id: UUID, learner_id: UUID, _user: dict = Depends(require_guardian)
+):
     return await get_learner_progress(learner_id=learner_id, guardian_id=guardian_id)
 
 
@@ -74,7 +90,9 @@ async def get_diagnostic_trends(learner_id: UUID, guardian_id: UUID, days: int =
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to get trends: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Failed to get trends: {e}"
+            ) from e
 
 
 @router.get("/{learner_id}/study-plan/{guardian_id}")
@@ -89,10 +107,16 @@ async def get_study_plan_adherence(learner_id: UUID, guardian_id: UUID):
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to get adherence: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Failed to get adherence: {e}"
+            ) from e
 
 
-@router.post("/report/generate", status_code=status.HTTP_200_OK, response_model=ParentReportResponse)
+@router.post(
+    "/report/generate",
+    status_code=status.HTTP_200_OK,
+    response_model=ParentReportResponse,
+)
 async def generate_parent_report(request: ParentPortalReportRequest):
     async with AsyncSessionFactory() as session:
         try:
@@ -107,7 +131,9 @@ async def generate_parent_report(request: ParentPortalReportRequest):
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=503, detail=f"Report generation failed: {e}") from e
+            raise HTTPException(
+                status_code=503, detail=f"Report generation failed: {e}"
+            ) from e
 
 
 @router.post(
@@ -120,7 +146,11 @@ async def record_consent(request: ConsentRequest):
     event_type = "consent_granted" if request.consented else "consent_revoked"
     async with AsyncSessionFactory() as session:
         try:
-            email_hash = __import__("hashlib").sha256(request.guardian_email.lower().strip().encode()).hexdigest()
+            email_hash = (
+                __import__("hashlib")
+                .sha256(request.guardian_email.lower().strip().encode())
+                .hexdigest()
+            )
             await session.execute(
                 text(
                     """
@@ -138,7 +168,9 @@ async def record_consent(request: ConsentRequest):
             await session.commit()
             return ConsentResponse(recorded=True, popia_compliant=True)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Consent recording failed: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Consent recording failed: {e}"
+            ) from e
 
 
 @router.post("/deletion/request", status_code=status.HTTP_202_ACCEPTED)
@@ -146,13 +178,17 @@ async def request_deletion(request: DeletionRequest):
     async with AsyncSessionFactory() as session:
         try:
             service = PopiaDeletionService(session)
-            return await service.request_deletion(request.learner_id, request.guardian_id, request.reason)
+            return await service.request_deletion(
+                request.learner_id, request.guardian_id, request.reason
+            )
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Deletion request failed: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Deletion request failed: {e}"
+            ) from e
 
 
 @router.post("/deletion/execute", status_code=status.HTTP_200_OK)
@@ -160,13 +196,17 @@ async def execute_deletion(request: DeletionRequest):
     async with AsyncSessionFactory() as session:
         try:
             service = PopiaDeletionService(session)
-            return await service.execute_deletion(request.learner_id, request.guardian_id)
+            return await service.execute_deletion(
+                request.learner_id, request.guardian_id
+            )
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Deletion execution failed: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Deletion execution failed: {e}"
+            ) from e
 
 
 @router.get("/deletion/status/{learner_id}/{guardian_id}")
@@ -180,7 +220,9 @@ async def get_deletion_status(learner_id: UUID, guardian_id: UUID):
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Status check failed: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Status check failed: {e}"
+            ) from e
 
 
 @router.get("/export/{learner_id}/{guardian_id}")
@@ -220,4 +262,6 @@ async def right_to_access(learner_id: UUID, guardian_id: UUID):
         except HTTPException:
             raise
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Right-to-access request failed: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Right-to-access request failed: {e}"
+            ) from e

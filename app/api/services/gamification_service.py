@@ -4,6 +4,7 @@ EduBoost SA — Gamification Service
 Handles XP calculation, badge awards, streak tracking, and
 progression mechanics for Grade R-3 and Grade 4-7 modes.
 """
+
 import uuid
 from datetime import datetime
 from typing import Optional
@@ -77,13 +78,13 @@ class GamificationService:
             .join(Badge, LearnerBadge.badge_id == Badge.badge_id)
             .where(LearnerBadge.learner_id == learner_id)
         )
-        
+
         # Handle both sync and async mock results
         try:
             all_badges = await result.all()
         except TypeError:
             all_badges = result.all()
-            
+
         earned_badges = [
             {
                 "badge_id": str(badge.badge_id),
@@ -126,20 +127,76 @@ class GamificationService:
         grade_band = "R-3" if grade <= 3 else "4-7"
 
         streak_badges = [
-            {"badge_key": "streak_3", "name": "Streak Starter", "description": "3-day streak", "badge_type": "streak", "threshold": 3, "icon_url": "/badges/streak_3.png"},
-            {"badge_key": "streak_7", "name": "Weekly Warrior", "description": "7-day streak", "badge_type": "streak", "threshold": 7, "icon_url": "/badges/streak_7.png"},
-            {"badge_key": "streak_14", "name": "Two-Week Titan", "description": "14-day streak", "badge_type": "streak", "threshold": 14, "icon_url": "/badges/streak_14.png"},
+            {
+                "badge_key": "streak_3",
+                "name": "Streak Starter",
+                "description": "3-day streak",
+                "badge_type": "streak",
+                "threshold": 3,
+                "icon_url": "/badges/streak_3.png",
+            },
+            {
+                "badge_key": "streak_7",
+                "name": "Weekly Warrior",
+                "description": "7-day streak",
+                "badge_type": "streak",
+                "threshold": 7,
+                "icon_url": "/badges/streak_7.png",
+            },
+            {
+                "badge_key": "streak_14",
+                "name": "Two-Week Titan",
+                "description": "14-day streak",
+                "badge_type": "streak",
+                "threshold": 14,
+                "icon_url": "/badges/streak_14.png",
+            },
         ]
 
         if grade_band == "R-3":
             return streak_badges
 
         discovery_badges = [
-            {"badge_key": "discovery_math", "name": "Math Explorer", "description": "Explore a new Maths topic", "badge_type": "discovery", "threshold": 1, "icon_url": "/badges/discovery_math.png"},
-            {"badge_key": "discovery_science", "name": "Science Explorer", "description": "Explore a new Science topic", "badge_type": "discovery", "threshold": 1, "icon_url": "/badges/discovery_science.png"},
-            {"badge_key": "discovery_english", "name": "English Explorer", "description": "Explore a new English topic", "badge_type": "discovery", "threshold": 1, "icon_url": "/badges/discovery_english.png"},
-            {"badge_key": "discovery_explorer", "name": "Explorer", "description": "Try a new topic", "badge_type": "discovery", "threshold": 1, "icon_url": "/badges/discovery_explorer.png"},
-            {"badge_key": "discovery_trailblazer", "name": "Trailblazer", "description": "Complete 5 new topics", "badge_type": "discovery", "threshold": 5, "icon_url": "/badges/discovery_trailblazer.png"},
+            {
+                "badge_key": "discovery_math",
+                "name": "Math Explorer",
+                "description": "Explore a new Maths topic",
+                "badge_type": "discovery",
+                "threshold": 1,
+                "icon_url": "/badges/discovery_math.png",
+            },
+            {
+                "badge_key": "discovery_science",
+                "name": "Science Explorer",
+                "description": "Explore a new Science topic",
+                "badge_type": "discovery",
+                "threshold": 1,
+                "icon_url": "/badges/discovery_science.png",
+            },
+            {
+                "badge_key": "discovery_english",
+                "name": "English Explorer",
+                "description": "Explore a new English topic",
+                "badge_type": "discovery",
+                "threshold": 1,
+                "icon_url": "/badges/discovery_english.png",
+            },
+            {
+                "badge_key": "discovery_explorer",
+                "name": "Explorer",
+                "description": "Try a new topic",
+                "badge_type": "discovery",
+                "threshold": 1,
+                "icon_url": "/badges/discovery_explorer.png",
+            },
+            {
+                "badge_key": "discovery_trailblazer",
+                "name": "Trailblazer",
+                "description": "Complete 5 new topics",
+                "badge_type": "discovery",
+                "threshold": 5,
+                "icon_url": "/badges/discovery_trailblazer.png",
+            },
         ]
         return streak_badges + discovery_badges
 
@@ -169,9 +226,10 @@ class GamificationService:
 
         # Check if learner has already reached daily cap
         from datetime import datetime, timedelta
+
         today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         tomorrow = today + timedelta(days=1)
-        
+
         result = await self.session.execute(
             text("""
                 SELECT COALESCE(SUM(time_on_task_ms), 0) as xp_awarded_today
@@ -185,17 +243,19 @@ class GamificationService:
                 "learner_id": str(learner_id),
                 "today": today,
                 "tomorrow": tomorrow,
-            }
+            },
         )
         daily_xp_row = result.mappings().first()
-        xp_awarded_today = daily_xp_row.get('xp_awarded_today', 0) if daily_xp_row else 0
-        
+        xp_awarded_today = (
+            daily_xp_row.get("xp_awarded_today", 0) if daily_xp_row else 0
+        )
+
         # Rough conversion: treat time_ms / 10 as rough XP proxy for cap checking
         # (More precise: maintain a separate daily XP counter in cache or separate table)
         estimated_daily_xp = xp_awarded_today // 10 if xp_awarded_today else 0
 
         total_awarded = base_xp + streak_bonus
-        
+
         # Check against daily cap
         if estimated_daily_xp + total_awarded > max_daily_xp:
             # Cap exceeded — return error or partial award
@@ -284,7 +344,9 @@ class GamificationService:
 
         return earned_badges
 
-    async def _award_existing_badge(self, learner_id: UUID, badge: Badge) -> Optional[dict]:
+    async def _award_existing_badge(
+        self, learner_id: UUID, badge: Badge
+    ) -> Optional[dict]:
         """Award a pre-existing DB badge to a learner."""
         learner_badge = LearnerBadge(
             id=uuid.uuid4(),
@@ -305,7 +367,9 @@ class GamificationService:
     async def _has_badge(self, learner_id: UUID, badge_key: str) -> bool:
         """Check if learner already has a specific badge."""
         result = await self.session.execute(
-            select(LearnerBadge).join(Badge).where(
+            select(LearnerBadge)
+            .join(Badge)
+            .where(
                 LearnerBadge.learner_id == learner_id,
                 Badge.badge_key == badge_key,
             )
@@ -313,7 +377,14 @@ class GamificationService:
         badge = await self._scalar_one_or_none(result)
         return badge is not None
 
-    async def _create_badge(self, learner_id: UUID, badge_key: str, name: str, description: str, grade_band: str) -> Optional[dict]:
+    async def _create_badge(
+        self,
+        learner_id: UUID,
+        badge_key: str,
+        name: str,
+        description: str,
+        grade_band: str,
+    ) -> Optional[dict]:
         """Fallback: create badge on-the-fly if not found in DB (legacy path)."""
         result = await self.session.execute(
             select(Badge).where(Badge.badge_key == badge_key)
@@ -340,7 +411,6 @@ class GamificationService:
         learner = await self.session.get(Learner, learner_id)
         if not learner:
             raise ValueError(f"Learner {learner_id} not found")
-
 
         # Check if streak should continue or reset
         last_active = learner.last_active_at
@@ -379,9 +449,7 @@ class GamificationService:
     async def get_leaderboard(self, limit: int = 10) -> list[dict]:
         """Get top learners by XP."""
         result = await self.session.execute(
-            select(Learner)
-            .order_by(Learner.total_xp.desc())
-            .limit(limit)
+            select(Learner).order_by(Learner.total_xp.desc()).limit(limit)
         )
         learners = result.scalars().all()
 

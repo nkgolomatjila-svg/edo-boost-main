@@ -1,4 +1,5 @@
 """EduBoost SA — System health, audit summaries, and pillar status."""
+
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -11,8 +12,10 @@ router = APIRouter()
 
 # ── POPIA Right to Access Response ───────────────────────────────────────────
 
+
 class LearnerDataSummary(BaseModel):
     """Summary of learner data for POPIA right-to-access."""
+
     learner_id: str
     pseudonym_id: Optional[str]
     first_name: Optional[str]
@@ -28,6 +31,7 @@ class LearnerDataSummary(BaseModel):
 
 class AccessRequestResponse(BaseModel):
     """Response for right-to-access request."""
+
     learner_id: str
     status: str
     data_summary: Optional[LearnerDataSummary]
@@ -56,7 +60,7 @@ async def system_health():
 async def check_schema_drift():
     """
     Check for schema drift between ORM models and actual database schema.
-    
+
     Returns:
     - drift_detected: Boolean indicating if ORM and DB schema are misaligned
     - missing_tables: Tables defined in ORM but not in DB
@@ -65,29 +69,32 @@ async def check_schema_drift():
     """
     from sqlalchemy import inspect, text
     from app.api.core.database import AsyncSessionFactory
-    
+
     try:
         async with AsyncSessionFactory() as session:
             # Get all ORM-defined tables from metadata
             from app.api.models.db_models import Base
+
             orm_tables = set(Base.metadata.tables.keys())
-            
+
             # Get all tables actually in the database
             inspector = inspect(session.sync_session.get_bind())
             db_tables = set(inspector.get_table_names())
-            
+
             # Check for drift
             missing_tables = orm_tables - db_tables  # ORM defined but not in DB
-            extra_tables = db_tables - orm_tables    # In DB but not in ORM
+            extra_tables = db_tables - orm_tables  # In DB but not in ORM
             drift_detected = len(missing_tables) > 0 or len(extra_tables) > 0
-            
+
             # Get current migration version
             migration_result = await session.execute(
-                text("SELECT version_num FROM alembic_version ORDER BY version_num DESC LIMIT 1")
+                text(
+                    "SELECT version_num FROM alembic_version ORDER BY version_num DESC LIMIT 1"
+                )
             )
             migration_row = migration_result.scalar_one_or_none()
             current_version = migration_row if migration_row else "unknown"
-            
+
             return {
                 "success": True,
                 "drift_detected": drift_detected,
@@ -97,9 +104,11 @@ async def check_schema_drift():
                 "db_table_count": len(db_tables),
                 "current_migration_version": current_version,
                 "recommended_action": (
-                    "Run Alembic migrations" if missing_tables 
-                    else ("Manual cleanup needed" if extra_tables 
-                    else "Schema is in sync")
+                    "Run Alembic migrations"
+                    if missing_tables
+                    else (
+                        "Manual cleanup needed" if extra_tables else "Schema is in sync"
+                    )
                 ),
             }
     except Exception as e:
@@ -157,56 +166,75 @@ async def refresh_rules():
 
 # ── POPIA Right to Access Endpoint ───────────────────────────────────────────
 
+
 @router.get("/access/{learner_id}", response_model=AccessRequestResponse)
 async def right_to_access(
     learner_id: str,
-    guardian_token: Optional[str] = Query(default=None, description="Guardian JWT token for authorization"),
+    guardian_token: Optional[str] = Query(
+        default=None, description="Guardian JWT token for authorization"
+    ),
 ):
     """
     POPIA right-to-access endpoint.
-    
+
     Returns all personal data held about a learner, including:
     - Basic profile data
     - Consent records
     - Audit events
     - Diagnostic session counts
     - Study plan counts
-    
+
     This endpoint requires guardian authorization via JWT token.
     """
     from sqlalchemy import select
     from app.api.core.database import AsyncSessionFactory
-    from app.api.models.db_models import Learner, LearnerIdentity, ConsentAudit, AuditEvent, DiagnosticSession, StudyPlan
-    
+    from app.api.models.db_models import (
+        Learner,
+        LearnerIdentity,
+        ConsentAudit,
+        AuditEvent,
+        DiagnosticSession,
+        StudyPlan,
+    )
+
     # Validate guardian token if provided
     if guardian_token:
         try:
             import jwt as pyjwt
             from app.api.core.config import settings
-            payload = pyjwt.decode(guardian_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+
+            payload = pyjwt.decode(
+                guardian_token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
+            )
             if payload.get("role") != "guardian":
                 raise HTTPException(status_code=403, detail="Guardian token required")
             token_learner_id = payload.get("learner_id")
             if token_learner_id != learner_id:
-                raise HTTPException(status_code=403, detail="Token does not match learner ID")
+                raise HTTPException(
+                    status_code=403, detail="Token does not match learner ID"
+                )
         except Exception as e:
-            raise HTTPException(status_code=401, detail="Invalid or expired token") from e
-    
+            raise HTTPException(
+                status_code=401, detail="Invalid or expired token"
+            ) from e
+
     try:
         async with AsyncSessionFactory() as session:
             # Get learner data
             learner_uuid = UUID(learner_id)
             learner = await session.get(Learner, learner_uuid)
-            
+
             if not learner:
                 raise HTTPException(status_code=404, detail="Learner not found")
-            
+
             # Get pseudonym
             result = await session.execute(
-                select(LearnerIdentity).where(LearnerIdentity.learner_id == learner_uuid)
+                select(LearnerIdentity).where(
+                    LearnerIdentity.learner_id == learner_uuid
+                )
             )
             identity = result.scalar_one_or_none()
-            
+
             # Get consent records
             result = await session.execute(
                 select(ConsentAudit)
@@ -218,12 +246,14 @@ async def right_to_access(
                 {
                     "event_type": r.event_type,
                     "consent_version": r.consent_version,
-                    "guardian_email_hash": r.guardian_email_hash[:8] + "..." if r.guardian_email_hash else None,
+                    "guardian_email_hash": r.guardian_email_hash[:8] + "..."
+                    if r.guardian_email_hash
+                    else None,
                     "occurred_at": r.occurred_at.isoformat() if r.occurred_at else None,
                 }
                 for r in result.scalars().all()
             ]
-            
+
             # Get audit events
             result = await session.execute(
                 select(AuditEvent)
@@ -239,27 +269,35 @@ async def right_to_access(
                 }
                 for r in result.scalars().all()
             ]
-            
+
             # Get diagnostic session count
             result = await session.execute(
-                select(DiagnosticSession).where(DiagnosticSession.learner_id == learner_uuid)
+                select(DiagnosticSession).where(
+                    DiagnosticSession.learner_id == learner_uuid
+                )
             )
             diagnostic_sessions = len(result.scalars().all())
-            
+
             # Get study plan count
             result = await session.execute(
                 select(StudyPlan).where(StudyPlan.learner_id == learner_uuid)
             )
             study_plans = len(result.scalars().all())
-            
+
             return AccessRequestResponse(
                 learner_id=str(learner.learner_id),
                 status="active" if learner.is_active else "inactive",
                 data_summary=LearnerDataSummary(
                     learner_id=str(learner.learner_id),
                     pseudonym_id=identity.pseudonym_id if identity else None,
-                    first_name=learner.first_name if learner.first_name and not learner.first_name.startswith("DELETED_") else None,
-                    last_name=learner.last_name if learner.last_name and not learner.last_name.startswith("DELETED_") else None,
+                    first_name=learner.first_name
+                    if learner.first_name
+                    and not learner.first_name.startswith("DELETED_")
+                    else None,
+                    last_name=learner.last_name
+                    if learner.last_name
+                    and not learner.last_name.startswith("DELETED_")
+                    else None,
                     email=learner.email,
                     overall_mastery=learner.overall_mastery,
                     total_xp=learner.total_xp,
@@ -282,8 +320,10 @@ async def right_to_access(
 
 # ── Audit Search/Query API ───────────────────────────────────────────────────
 
+
 class AuditSearchResponse(BaseModel):
     """Response for audit search queries."""
+
     events: list
     total_count: int
     page: int
@@ -295,25 +335,29 @@ class AuditSearchResponse(BaseModel):
 async def search_audit_events(
     learner_id: Optional[str] = Query(default=None, description="Filter by learner ID"),
     event_type: Optional[str] = Query(default=None, description="Filter by event type"),
-    start_date: Optional[datetime] = Query(default=None, description="Start date for time range"),
-    end_date: Optional[datetime] = Query(default=None, description="End date for time range"),
+    start_date: Optional[datetime] = Query(
+        default=None, description="Start date for time range"
+    ),
+    end_date: Optional[datetime] = Query(
+        default=None, description="End date for time range"
+    ),
     page: int = Query(default=1, ge=1, description="Page number"),
     page_size: int = Query(default=50, ge=1, le=500, description="Results per page"),
 ):
     """
     Search and query audit events.
-    
+
     Supports filtering by:
     - learner_id: Specific learner
     - event_type: Type of event (e.g., LOGIN, DIAGNOSTIC_COMPLETE, LESSON_GENERATED)
     - start_date/end_date: Time range
-    
+
     Returns paginated results with event details.
     """
     from sqlalchemy import select, and_
     from app.api.core.database import AsyncSessionFactory
     from app.api.models.db_models import AuditEvent
-    
+
     try:
         async with AsyncSessionFactory() as session:
             # Build query conditions
@@ -326,25 +370,32 @@ async def search_audit_events(
                 conditions.append(AuditEvent.occurred_at >= start_date)
             if end_date:
                 conditions.append(AuditEvent.occurred_at <= end_date)
-            
+
             # Build and execute query
             query = select(AuditEvent)
             if conditions:
                 query = query.where(and_(*conditions))
-            
+
             # Get total count
             count_query = select(AuditEvent)
             if conditions:
                 count_query = count_query.where(and_(*conditions))
-            
+
             from sqlalchemy import func
-            count_result = await session.execute(select(func.count()).select_from(count_query.subquery()))
+
+            count_result = await session.execute(
+                select(func.count()).select_from(count_query.subquery())
+            )
             total_count = count_result.scalar() or 0
-            
+
             # Apply pagination
             offset = (page - 1) * page_size
-            query = query.order_by(AuditEvent.occurred_at.desc()).offset(offset).limit(page_size)
-            
+            query = (
+                query.order_by(AuditEvent.occurred_at.desc())
+                .offset(offset)
+                .limit(page_size)
+            )
+
             result = await session.execute(query)
             events = [
                 {
@@ -356,7 +407,7 @@ async def search_audit_events(
                 }
                 for e in result.scalars().all()
             ]
-            
+
             return AuditSearchResponse(
                 events=events,
                 total_count=total_count,

@@ -3,6 +3,7 @@
 Provides CRUD for the assessments catalog and handles learner attempt submission
 with automatic score computation. Persists results to assessment_attempts.
 """
+
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -19,14 +20,17 @@ router = APIRouter()
 
 # ── Request / Response Schemas ─────────────────────────────────────────────────
 
+
 class AttemptResponse(BaseModel):
     """A single question response within an attempt submission."""
+
     question_id: str
     learner_answer: str
 
 
 class AttemptSubmitRequest(BaseModel):
     """Learner attempt submission payload."""
+
     learner_id: UUID
     responses: list[AttemptResponse]
     time_taken_seconds: int = Field(default=0, ge=0)
@@ -34,10 +38,11 @@ class AttemptSubmitRequest(BaseModel):
 
 class AttemptResult(BaseModel):
     """Score result returned after a submitted attempt."""
+
     attempt_id: UUID
     assessment_id: UUID
     learner_id: UUID
-    score: float                  # 0.0 – 1.0
+    score: float  # 0.0 – 1.0
     marks_obtained: int
     total_marks: int
     passed: bool
@@ -49,7 +54,10 @@ class AttemptResult(BaseModel):
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
-def _score_attempt(questions: list[dict], responses: list[AttemptResponse]) -> dict[str, Any]:
+
+def _score_attempt(
+    questions: list[dict], responses: list[AttemptResponse]
+) -> dict[str, Any]:
     """
     Grade a submitted attempt against the assessment questions.
     Returns marks_obtained, total_marks, score (0–1), correct/incorrect counts,
@@ -76,11 +84,13 @@ def _score_attempt(questions: list[dict], responses: list[AttemptResponse]) -> d
         else:
             incorrect += 1
 
-        breakdown.append({
-            "question_id": qid,
-            "is_correct": is_correct,
-            "marks_awarded": marks if is_correct else 0,
-        })
+        breakdown.append(
+            {
+                "question_id": qid,
+                "is_correct": is_correct,
+                "marks_awarded": marks if is_correct else 0,
+            }
+        )
 
     score = marks_obtained / total_marks if total_marks > 0 else 0.0
     return {
@@ -95,15 +105,20 @@ def _score_attempt(questions: list[dict], responses: list[AttemptResponse]) -> d
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
+
 @router.get(
     "/",
     status_code=status.HTTP_200_OK,
     summary="List available assessments",
 )
 async def list_assessments(
-    subject_code: Optional[str] = Query(default=None, description="Filter by subject (e.g. MATH, ENG)"),
+    subject_code: Optional[str] = Query(
+        default=None, description="Filter by subject (e.g. MATH, ENG)"
+    ),
     grade_level: Optional[int] = Query(default=None, ge=0, le=7),
-    assessment_type: Optional[str] = Query(default=None, description="quiz | test | exam | diagnostic"),
+    assessment_type: Optional[str] = Query(
+        default=None, description="quiz | test | exam | diagnostic"
+    ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ):
@@ -159,7 +174,9 @@ async def get_assessment(assessment_id: UUID):
     """Return full assessment details including the questions array."""
     async with AsyncSessionFactory() as session:
         result = await session.execute(
-            text("SELECT * FROM assessments WHERE assessment_id = :id AND is_active = TRUE"),
+            text(
+                "SELECT * FROM assessments WHERE assessment_id = :id AND is_active = TRUE"
+            ),
             {"id": str(assessment_id)},
         )
         row = result.mappings().first()
@@ -198,7 +215,9 @@ async def submit_attempt(
     async with AsyncSessionFactory() as session:
         # 1. Fetch assessment
         result = await session.execute(
-            text("SELECT * FROM assessments WHERE assessment_id = :id AND is_active = TRUE"),
+            text(
+                "SELECT * FROM assessments WHERE assessment_id = :id AND is_active = TRUE"
+            ),
             {"id": str(assessment_id)},
         )
         row = result.mappings().first()
@@ -233,6 +252,7 @@ async def submit_attempt(
 
     # 3. Persist
     import json
+
     async with AsyncSessionFactory() as session:
         insert_result = await session.execute(
             text(
@@ -262,9 +282,12 @@ async def submit_attempt(
     # ── Award XP and update streak after successful attempt ──────────────
     try:
         from app.api.services.gamification_service import GamificationService
+
         async with AsyncSessionFactory() as session:
             service = GamificationService(session)
-            xp_type = "perfect_score" if scored["score"] >= 1.0 else "diagnostic_complete"
+            xp_type = (
+                "perfect_score" if scored["score"] >= 1.0 else "diagnostic_complete"
+            )
             await service.award_xp(learner_id=request.learner_id, xp_type=xp_type)
             await service.update_streak(request.learner_id)
     except Exception:

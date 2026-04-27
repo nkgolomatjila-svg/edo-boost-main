@@ -3,6 +3,7 @@
 Provides endpoints for querying and searching audit events
 for compliance and transparency purposes.
 """
+
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -18,6 +19,7 @@ router = APIRouter()
 
 class AuditQueryRequest(BaseModel):
     """Request model for audit queries."""
+
     learner_id: Optional[UUID] = None
     event_type: Optional[str] = None
     pillar: Optional[str] = None
@@ -29,6 +31,7 @@ class AuditQueryRequest(BaseModel):
 
 class AuditSearchRequest(BaseModel):
     """Request model for audit search."""
+
     query: str
     learner_id: Optional[UUID] = None
     limit: int = 50
@@ -38,7 +41,7 @@ class AuditSearchRequest(BaseModel):
 async def query_audit_events(request: AuditQueryRequest):
     """
     Query audit events with optional filtering.
-    
+
     Query parameters:
     - learner_id: Filter by learner UUID
     - event_type: Filter by event type (e.g., ACTION_SUBMITTED, STAMP_ISSUED)
@@ -69,7 +72,7 @@ async def query_audit_events(request: AuditQueryRequest):
 async def search_audit_events(request: AuditSearchRequest):
     """
     Search audit events by free-text query.
-    
+
     Searches in event_type, pillar, and payload fields.
     """
     async with AsyncSessionFactory() as session:
@@ -92,7 +95,7 @@ async def get_learner_audit_trail(
 ):
     """
     Get complete audit trail for a learner.
-    
+
     Returns all audit events for a learner organized by category
     (access, modifications, consent, deletions, violations).
     """
@@ -105,7 +108,9 @@ async def get_learner_audit_trail(
             )
             return {"success": True, "data": result}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Audit trail retrieval failed: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Audit trail retrieval failed: {e}"
+            ) from e
 
 
 @router.get("/compliance/report")
@@ -114,7 +119,7 @@ async def get_compliance_report(
 ):
     """
     Get a compliance report from audit events.
-    
+
     Provides statistics on constitutional adherence, violations,
     rejections, and LLM performance.
     """
@@ -124,7 +129,9 @@ async def get_compliance_report(
             result = await service.get_compliance_report(days=days)
             return {"success": True, "data": result}
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Compliance report generation failed: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Compliance report generation failed: {e}"
+            ) from e
 
 
 @router.get("/recent")
@@ -135,13 +142,15 @@ async def get_recent_audit_events(limit: int = Query(50, ge=1, le=500)):
     try:
         fourth_estate = get_fourth_estate()
         recent = fourth_estate.get_recent_events(limit)
-        
+
         return {
             "success": True,
             "count": len(recent),
             "events": [
                 {
-                    "event_type": event.event_type.value if hasattr(event.event_type, "value") else str(event.event_type),
+                    "event_type": event.event_type.value
+                    if hasattr(event.event_type, "value")
+                    else str(event.event_type),
                     "pillar": event.pillar,
                     "learner_hash": event.learner_hash,
                     "action_id": event.action_id,
@@ -151,7 +160,9 @@ async def get_recent_audit_events(limit: int = Query(50, ge=1, le=500)):
             ],
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get recent events: {e}") from e
+        raise HTTPException(
+            status_code=500, detail=f"Failed to get recent events: {e}"
+        ) from e
 
 
 @router.get("/health")
@@ -163,7 +174,7 @@ async def get_audit_health_status():
         fourth_estate = get_fourth_estate()
         stats = fourth_estate.get_stats()
         health = fourth_estate.get_health_status()
-        
+
         return {
             "success": True,
             "audit_stats": stats,

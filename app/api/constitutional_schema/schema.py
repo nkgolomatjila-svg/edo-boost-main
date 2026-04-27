@@ -1,4 +1,5 @@
 """EduBoost SA — Constitutional corpus (Legislature)."""
+
 from __future__ import annotations
 
 from typing import Iterable
@@ -39,7 +40,12 @@ POPIA_01 = _rule(
     RuleSeverity.CRITICAL,
     "Verify no learner-identifying tokens reach external processors.",
     "POPIA Act 4 of 2013 — Processing limitation",
-    (ActionType.GENERATE_LESSON, ActionType.RUN_DIAGNOSTIC, ActionType.START_DIAGNOSTIC, ActionType.SUBMIT_DIAGNOSTIC_RESPONSE),
+    (
+        ActionType.GENERATE_LESSON,
+        ActionType.RUN_DIAGNOSTIC,
+        ActionType.START_DIAGNOSTIC,
+        ActionType.SUBMIT_DIAGNOSTIC_RESPONSE,
+    ),
 )
 POPIA_02 = _rule(
     "POPIA_02",
@@ -71,7 +77,11 @@ CAPS_02 = _rule(
     RuleSeverity.MEDIUM,
     "Assessments must respect subject and grade scope.",
     "CAPS scope",
-    (ActionType.RUN_DIAGNOSTIC, ActionType.START_DIAGNOSTIC, ActionType.SUBMIT_DIAGNOSTIC_RESPONSE),
+    (
+        ActionType.RUN_DIAGNOSTIC,
+        ActionType.START_DIAGNOSTIC,
+        ActionType.SUBMIT_DIAGNOSTIC_RESPONSE,
+    ),
 )
 CAPS_03 = _rule(
     "CAPS_03",
@@ -95,7 +105,12 @@ PII_01 = _rule(
     RuleSeverity.CRITICAL,
     "No UUIDs, emails, phone numbers, or SA ID numbers in LLM-bound prompts.",
     "POPIA — Pseudonymisation / LLM firewall",
-    (ActionType.GENERATE_LESSON, ActionType.RUN_DIAGNOSTIC, ActionType.START_DIAGNOSTIC, ActionType.SUBMIT_DIAGNOSTIC_RESPONSE),
+    (
+        ActionType.GENERATE_LESSON,
+        ActionType.RUN_DIAGNOSTIC,
+        ActionType.START_DIAGNOSTIC,
+        ActionType.SUBMIT_DIAGNOSTIC_RESPONSE,
+    ),
 )
 LANG_01 = _rule(
     "LANG_01",
@@ -120,11 +135,17 @@ CONSTITUTIONAL_CORPUS: tuple[ConstitutionalRule, ...] = (
 
 
 def get_rules_for_action(action_type: ActionType) -> list[ConstitutionalRule]:
-    return [r for r in CONSTITUTIONAL_CORPUS if r.is_active and action_type in r.applies_to]
+    return [
+        r for r in CONSTITUTIONAL_CORPUS if r.is_active and action_type in r.applies_to
+    ]
 
 
 def get_critical_rules(action_type: ActionType) -> list[ConstitutionalRule]:
-    return [r for r in get_rules_for_action(action_type) if r.severity == RuleSeverity.CRITICAL]
+    return [
+        r
+        for r in get_rules_for_action(action_type)
+        if r.severity == RuleSeverity.CRITICAL
+    ]
 
 
 def get_rule(rule_id: str) -> ConstitutionalRule | None:

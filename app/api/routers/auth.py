@@ -1,4 +1,5 @@
 """EduBoost SA — Auth Router"""
+
 from datetime import datetime, timedelta
 import hashlib
 import uuid
@@ -34,15 +35,21 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 # ── Shared JWT helpers ─────────────────────────────────────────────────────────
 
+
 def _create_token(data: dict) -> str:
-    payload = {**data, "exp": datetime.utcnow() + timedelta(hours=settings.JWT_EXPIRY_HOURS)}
+    payload = {
+        **data,
+        "exp": datetime.utcnow() + timedelta(hours=settings.JWT_EXPIRY_HOURS),
+    }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
 def _decode_token(token: str) -> dict:
     """Decode and verify a JWT. Raises HTTPException on failure."""
     try:
-        return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+        return jwt.decode(
+            token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM]
+        )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
@@ -60,6 +67,7 @@ async def get_current_user(
 
 async def require_role(role: str):
     """Factory for role-specific dependencies."""
+
     async def _guard(user: dict = Depends(get_current_user)):
         if user.get("role") != role:
             raise HTTPException(
@@ -67,10 +75,12 @@ async def require_role(role: str):
                 detail=f"This endpoint requires the '{role}' role",
             )
         return user
+
     return _guard
 
 
 # ── Guardian verification (legacy email-hash check) ───────────────────────────
+
 
 async def _verify_guardian(email: str, learner_pseudonym_id: str) -> bool:
     email_hash = hashlib.sha256(email.lower().strip().encode()).hexdigest()
@@ -84,18 +94,22 @@ async def _verify_guardian(email: str, learner_pseudonym_id: str) -> bool:
             if not parent:
                 log.warning("auth.guardian.account_not_found", email_hash=email_hash)
                 return False
-            
+
             # 2. Check for direct link to this learner
             link_result = await session.execute(
                 select(ParentLearnerLink).where(
                     ParentLearnerLink.parent_id == parent.parent_id,
-                    ParentLearnerLink.learner_id == uuid.UUID(learner_pseudonym_id)
+                    ParentLearnerLink.learner_id == uuid.UUID(learner_pseudonym_id),
                 )
             )
             if link_result.first() is None:
-                log.warning("auth.guardian.no_link_found", parent_id=str(parent.parent_id), learner_id=learner_pseudonym_id)
+                log.warning(
+                    "auth.guardian.no_link_found",
+                    parent_id=str(parent.parent_id),
+                    learner_id=learner_pseudonym_id,
+                )
                 return False
-            
+
         return True
     except Exception as e:
         log.error("auth.guardian.db_error", error=str(e))
@@ -103,6 +117,7 @@ async def _verify_guardian(email: str, learner_pseudonym_id: str) -> bool:
 
 
 # ── Request Models ─────────────────────────────────────────────────────────────
+
 
 class GuardianRegisterRequest(BaseModel):
     email: EmailStr
@@ -112,10 +127,13 @@ class GuardianRegisterRequest(BaseModel):
 
 class LinkLearnerRequest(BaseModel):
     learner_id: str
-    relationship: str = Field(default="guardian", pattern="^(guardian|parent|grandparent)$")
+    relationship: str = Field(
+        default="guardian", pattern="^(guardian|parent|grandparent)$"
+    )
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
+
 
 @router.post(
     "/guardian/register",
@@ -127,12 +145,16 @@ class LinkLearnerRequest(BaseModel):
 async def register_guardian(request: Request, body: GuardianRegisterRequest):
     """Register a new guardian account. Returns a JWT immediately."""
     email_lower = body.email.lower().strip()
-    email_encrypted = hashlib.sha256(email_lower.encode()).hexdigest()  # Placeholder for real encryption
+    email_encrypted = hashlib.sha256(
+        email_lower.encode()
+    ).hexdigest()  # Placeholder for real encryption
 
     async with AsyncSessionFactory() as session:
         # Check for duplicate
         existing = await session.execute(
-            select(ParentAccount).where(ParentAccount.email_encrypted == email_encrypted)
+            select(ParentAccount).where(
+                ParentAccount.email_encrypted == email_encrypted
+            )
         )
         if existing.scalar_one_or_none():
             raise HTTPException(
@@ -154,12 +176,16 @@ async def register_guardian(request: Request, body: GuardianRegisterRequest):
         await session.commit()
         log.info("auth.guardian.registered", parent_id=str(parent.parent_id))
 
-    token = _create_token({
-        "sub": str(parent.parent_id),
-        "email_hash": email_encrypted,
-        "role": "guardian",
-    })
-    return TokenResponse(access_token=token, expires_in=settings.JWT_EXPIRY_HOURS * 3600)
+    token = _create_token(
+        {
+            "sub": str(parent.parent_id),
+            "email_hash": email_encrypted,
+            "role": "guardian",
+        }
+    )
+    return TokenResponse(
+        access_token=token, expires_in=settings.JWT_EXPIRY_HOURS * 3600
+    )
 
 
 @router.post(
@@ -175,7 +201,9 @@ async def guardian_login(request: Request, request_body: GuardianLoginRequest):
 
     async with AsyncSessionFactory() as session:
         result = await session.execute(
-            select(ParentAccount).where(ParentAccount.email_encrypted == email_encrypted)
+            select(ParentAccount).where(
+                ParentAccount.email_encrypted == email_encrypted
+            )
         )
         parent = result.scalar_one_or_none()
 
@@ -183,23 +211,40 @@ async def guardian_login(request: Request, request_body: GuardianLoginRequest):
         # Full password-based login
         if not bcrypt.verify(request_body.password, parent.password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials")
-        token = _create_token({
-            "sub": str(parent.parent_id),
-            "email_hash": email_encrypted,
-            "role": "guardian",
-        })
-        return TokenResponse(access_token=token, expires_in=settings.JWT_EXPIRY_HOURS * 3600)
+        token = _create_token(
+            {
+                "sub": str(parent.parent_id),
+                "email_hash": email_encrypted,
+                "role": "guardian",
+            }
+        )
+        return TokenResponse(
+            access_token=token, expires_in=settings.JWT_EXPIRY_HOURS * 3600
+        )
 
     # Fallback: legacy pseudonym-based verification
-    if not await _verify_guardian(request_body.email, request_body.learner_pseudonym_id):
+    if not await _verify_guardian(
+        request_body.email, request_body.learner_pseudonym_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ErrorResponse(error="Invalid guardian credentials", code="INVALID_GUARDIAN_CREDENTIALS").model_dump(),
+            detail=ErrorResponse(
+                error="Invalid guardian credentials",
+                code="INVALID_GUARDIAN_CREDENTIALS",
+            ).model_dump(),
         )
 
     email_hash = hashlib.sha256(request_body.email.lower().strip().encode()).hexdigest()
-    token = _create_token({"sub": email_hash, "learner_id": request_body.learner_pseudonym_id, "role": "guardian"})
-    return TokenResponse(access_token=token, expires_in=settings.JWT_EXPIRY_HOURS * 3600)
+    token = _create_token(
+        {
+            "sub": email_hash,
+            "learner_id": request_body.learner_pseudonym_id,
+            "role": "guardian",
+        }
+    )
+    return TokenResponse(
+        access_token=token, expires_in=settings.JWT_EXPIRY_HOURS * 3600
+    )
 
 
 @router.post("/guardian/link-learner", status_code=status.HTTP_201_CREATED)
@@ -221,7 +266,9 @@ async def link_learner(
             )
         )
         if existing.scalar_one_or_none():
-            raise HTTPException(status_code=409, detail="Learner already linked to this guardian")
+            raise HTTPException(
+                status_code=409, detail="Learner already linked to this guardian"
+            )
 
         link = ParentLearnerLink(
             link_id=uuid.uuid4(),
@@ -232,7 +279,9 @@ async def link_learner(
         )
         session.add(link)
         await session.commit()
-        log.info("auth.guardian.linked", parent_id=parent_id, learner_id=body.learner_id)
+        log.info(
+            "auth.guardian.linked", parent_id=parent_id, learner_id=body.learner_id
+        )
 
     return {
         "success": True,
@@ -245,7 +294,9 @@ async def link_learner(
 async def get_linked_learners(user: dict = Depends(get_current_user)):
     """List all learners linked to the authenticated guardian."""
     if user.get("role") != "guardian":
-        raise HTTPException(status_code=403, detail="Only guardians can view linked learners")
+        raise HTTPException(
+            status_code=403, detail="Only guardians can view linked learners"
+        )
 
     parent_id = user.get("sub")
     async with AsyncSessionFactory() as session:
@@ -270,43 +321,49 @@ async def get_linked_learners(user: dict = Depends(get_current_user)):
 @limiter.limit("10/minute")
 async def create_learner_session(request: Request, request_body: LearnerSessionRequest):
     token = _create_token({"sub": request_body.learner_id, "role": "learner"})
-    return LearnerSessionResponse(session_token=token, expires_in=settings.JWT_EXPIRY_HOURS * 3600)
+    return LearnerSessionResponse(
+        session_token=token, expires_in=settings.JWT_EXPIRY_HOURS * 3600
+    )
 
 
 @router.post("/guardian/logout", status_code=status.HTTP_200_OK)
 async def guardian_logout(user: dict = Depends(get_current_user)):
     """
     Logout endpoint for guardian accounts.
-    
+
     Invalidates the current session token by maintaining a blacklist in Redis.
     The token remains valid until expiry unless explicitly blacklisted.
     """
     if user.get("role") != "guardian":
-        raise HTTPException(status_code=403, detail="Only guardians can use this endpoint")
-    
+        raise HTTPException(
+            status_code=403, detail="Only guardians can use this endpoint"
+        )
+
     try:
         import redis.asyncio as redis_lib
         from app.api.core.config import settings
-        
+
         # Add token to blacklist cache with TTL = token expiry
         r = redis_lib.from_url(settings.REDIS_URL, decode_responses=True)
-        
+
         # Calculate remaining TTL from token expiry
         from datetime import datetime
-        
+
         token_exp = user.get("exp")
         if token_exp:
             now = datetime.utcnow().timestamp()
             ttl = max(1, int(token_exp - now))
-            
+
             # Blacklist the token (store token sub + role as value)
             token_key = f"token_blacklist:{user.get('sub')}"
-            await r.setex(token_key, ttl, f"{user.get('role')}:{datetime.utcnow().isoformat()}")
-        
+            await r.setex(
+                token_key, ttl, f"{user.get('role')}:{datetime.utcnow().isoformat()}"
+            )
+
         await r.aclose()
-        
+
         log.info("auth.guardian.logout", parent_id=user.get("sub"))
-        
+
         return {
             "success": True,
             "message": "Session invalidated. Token blacklisted.",
@@ -324,32 +381,34 @@ async def guardian_logout(user: dict = Depends(get_current_user)):
 async def learner_logout(user: dict = Depends(get_current_user)):
     """
     Logout endpoint for learner sessions.
-    
+
     Invalidates the learner session token by maintaining a blacklist in Redis.
     """
     if user.get("role") != "learner":
-        raise HTTPException(status_code=403, detail="Only learners can use this endpoint")
-    
+        raise HTTPException(
+            status_code=403, detail="Only learners can use this endpoint"
+        )
+
     try:
         import redis.asyncio as redis_lib
         from app.api.core.config import settings
         from datetime import datetime
-        
+
         r = redis_lib.from_url(settings.REDIS_URL, decode_responses=True)
-        
+
         # Calculate TTL from token expiry
         token_exp = user.get("exp")
         if token_exp:
             now = datetime.utcnow().timestamp()
             ttl = max(1, int(token_exp - now))
-            
+
             token_key = f"token_blacklist:{user.get('sub')}"
             await r.setex(token_key, ttl, f"learner:{datetime.utcnow().isoformat()}")
-        
+
         await r.aclose()
-        
+
         log.info("auth.learner.logout", learner_id=user.get("sub"))
-        
+
         return {
             "success": True,
             "message": "Learner session invalidated.",
@@ -360,4 +419,3 @@ async def learner_logout(user: dict = Depends(get_current_user)):
             "success": True,
             "message": "Logout processed.",
         }
-

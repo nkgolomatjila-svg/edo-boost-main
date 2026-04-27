@@ -1,4 +1,5 @@
 """EduBoost SA — Judiciary (Pillar 3): constitutional review before side effects."""
+
 from __future__ import annotations
 
 import time
@@ -18,17 +19,19 @@ _EMAIL_RE = EMAIL_RE
 _PHONE_RE = PHONE_RE
 _SA_ID_RE = SA_ID_RE
 
-_LESSON_ALLOWED_KEYS = frozenset({
-    "subject_code",
-    "subject_label",
-    "topic",
-    "home_language",
-    "learning_style_primary",
-    "mastery_prior",
-    "has_gap",
-    "gap_grade",
-    "sa_theme",
-})
+_LESSON_ALLOWED_KEYS = frozenset(
+    {
+        "subject_code",
+        "subject_label",
+        "topic",
+        "home_language",
+        "learning_style_primary",
+        "mastery_prior",
+        "has_gap",
+        "gap_grade",
+        "sa_theme",
+    }
+)
 
 _judiciary: Optional["Judiciary"] = None
 
@@ -40,14 +43,18 @@ class Judiciary:
         self._rejections = 0
 
     def get_stats(self) -> dict:
-        rate = 0.0 if self._total == 0 else (self._total - self._rejections) / self._total
+        rate = (
+            0.0 if self._total == 0 else (self._total - self._rejections) / self._total
+        )
         return {
             "total_stamps": self._total,
             "rejections": self._rejections,
             "approval_rate": round(rate, 4),
         }
 
-    def _scan_prompts(self, system_prompt: Optional[str], user_prompt: Optional[str]) -> list[str]:
+    def _scan_prompts(
+        self, system_prompt: Optional[str], user_prompt: Optional[str]
+    ) -> list[str]:
         violations: list[str] = []
         blob = f"{system_prompt or ''}\n{user_prompt or ''}"
         if _UUID_RE.search(blob):
@@ -84,7 +91,11 @@ class Judiciary:
         t0 = time.perf_counter()
         rules = [r.rule_id for r in get_rules_for_action(action.action_type)]
         violations: list[str] = list(dict.fromkeys(self._structural(action)))
-        violations.extend(v for v in self._scan_prompts(system_prompt, user_prompt) if v not in violations)
+        violations.extend(
+            v
+            for v in self._scan_prompts(system_prompt, user_prompt)
+            if v not in violations
+        )
 
         if violations:
             self._rejections += 1

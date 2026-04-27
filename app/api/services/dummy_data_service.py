@@ -62,11 +62,17 @@ class DummyDataService:
 
         async with _GEN_LOCK:
             async with AsyncSessionFactory() as session:
-                existing = await session.scalar(select(func.count()).select_from(DummyDataPoint).where(DummyDataPoint.kind == kind))
+                existing = await session.scalar(
+                    select(func.count())
+                    .select_from(DummyDataPoint)
+                    .where(DummyDataPoint.kind == kind)
+                )
                 existing = int(existing or 0)
 
                 persistent_existing = await session.scalar(
-                    select(func.count()).select_from(DummyDataPoint).where(
+                    select(func.count())
+                    .select_from(DummyDataPoint)
+                    .where(
                         DummyDataPoint.kind == kind,
                         DummyDataPoint.is_persistent == True,  # noqa: E712
                     )
@@ -75,7 +81,12 @@ class DummyDataService:
 
                 to_create = max(0, target - existing)
                 if to_create <= 0:
-                    await self._cleanup_if_needed(session=session, kind=kind, target=target, persistent_floor=persistent_floor)
+                    await self._cleanup_if_needed(
+                        session=session,
+                        kind=kind,
+                        target=target,
+                        persistent_floor=persistent_floor,
+                    )
                     return
 
                 # Create in batches.
@@ -97,7 +108,9 @@ class DummyDataService:
                                 payload={
                                     "ts": now,
                                     "value": random.random(),
-                                    "label": random.choice(["alpha", "beta", "gamma", "delta"]),
+                                    "label": random.choice(
+                                        ["alpha", "beta", "gamma", "delta"]
+                                    ),
                                     "source": "dummy-generator",
                                 },
                             )
@@ -107,16 +120,29 @@ class DummyDataService:
                     await session.commit()
                     to_create -= n
 
-                await self._cleanup_if_needed(session=session, kind=kind, target=target, persistent_floor=persistent_floor)
+                await self._cleanup_if_needed(
+                    session=session,
+                    kind=kind,
+                    target=target,
+                    persistent_floor=persistent_floor,
+                )
 
-    async def _cleanup_if_needed(self, session, kind: str, target: int, persistent_floor: int) -> None:
-        total = await session.scalar(select(func.count()).select_from(DummyDataPoint).where(DummyDataPoint.kind == kind))
+    async def _cleanup_if_needed(
+        self, session, kind: str, target: int, persistent_floor: int
+    ) -> None:
+        total = await session.scalar(
+            select(func.count())
+            .select_from(DummyDataPoint)
+            .where(DummyDataPoint.kind == kind)
+        )
         total = int(total or 0)
         if total <= target:
             return
 
         persistent_count = await session.scalar(
-            select(func.count()).select_from(DummyDataPoint).where(
+            select(func.count())
+            .select_from(DummyDataPoint)
+            .where(
                 DummyDataPoint.kind == kind,
                 DummyDataPoint.is_persistent == True,  # noqa: E712
             )
@@ -141,9 +167,10 @@ class DummyDataService:
         if not id_list:
             return
 
-        await session.execute(delete(DummyDataPoint).where(DummyDataPoint.data_id.in_(id_list)))
+        await session.execute(
+            delete(DummyDataPoint).where(DummyDataPoint.data_id.in_(id_list))
+        )
         await session.commit()
 
 
 dummy_data_service = DummyDataService()
-

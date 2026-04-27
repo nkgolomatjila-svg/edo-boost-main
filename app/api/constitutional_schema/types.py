@@ -1,4 +1,5 @@
 """EduBoost SA — Constitutional types (Legislature contracts)."""
+
 from __future__ import annotations
 
 import re

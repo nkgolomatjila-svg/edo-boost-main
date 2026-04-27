@@ -4,6 +4,7 @@ EduBoost SA — Study Plan Generation Service
 Generates dynamic CAPS-aligned study plans that blend remediation
 and grade-level pacing based on diagnostic output and learner progress.
 """
+
 import uuid
 from datetime import datetime, timedelta
 from uuid import UUID
@@ -59,7 +60,9 @@ class StudyPlanService:
         if not learner:
             raise ValueError(f"Learner {learner_id} not found")
 
-        subjects_mastery = subjects_mastery or await self._get_subject_mastery(learner_id)
+        subjects_mastery = subjects_mastery or await self._get_subject_mastery(
+            learner_id
+        )
         knowledge_gaps = knowledge_gaps or await self._get_knowledge_gaps(learner_id)
         normalized_gap_ratio = max(0.3, min(0.6, gap_ratio))
         grade_band = "R-3" if grade <= 3 else "4-7"
@@ -101,7 +104,9 @@ class StudyPlanService:
                     knowledge_gaps=knowledge_gaps,
                     gap_ratio=normalized_gap_ratio,
                 )
-                week_focus = self._determine_week_focus(knowledge_gaps, subjects_mastery)
+                week_focus = self._determine_week_focus(
+                    knowledge_gaps, subjects_mastery
+                )
             else:
                 plan_data = result.output or {}
                 schedule = plan_data.get("days") or plan_data.get("schedule") or {}
@@ -133,17 +138,28 @@ class StudyPlanService:
         }
 
     async def _get_subject_mastery(self, learner_id: UUID) -> dict[str, float]:
-        result = await self.session.execute(select(SubjectMastery).where(SubjectMastery.learner_id == learner_id))
-        return {record.subject_code: record.mastery_score for record in result.scalars().all()}
+        result = await self.session.execute(
+            select(SubjectMastery).where(SubjectMastery.learner_id == learner_id)
+        )
+        return {
+            record.subject_code: record.mastery_score
+            for record in result.scalars().all()
+        }
 
     async def _get_knowledge_gaps(self, learner_id: UUID) -> list[str]:
-        result = await self.session.execute(select(SubjectMastery).where(SubjectMastery.learner_id == learner_id))
+        result = await self.session.execute(
+            select(SubjectMastery).where(SubjectMastery.learner_id == learner_id)
+        )
         gaps: list[str] = []
         for record in result.scalars().all():
             if record.knowledge_gaps:
                 for gap in record.knowledge_gaps:
                     if isinstance(gap, dict):
-                        concept = gap.get("concept") or gap.get("concept_code") or gap.get("name")
+                        concept = (
+                            gap.get("concept")
+                            or gap.get("concept_code")
+                            or gap.get("name")
+                        )
                         if concept:
                             gaps.append(str(concept))
                     else:
@@ -158,18 +174,59 @@ class StudyPlanService:
         knowledge_gaps: list[str],
         gap_ratio: float,
     ) -> dict:
-        schedule = {day: [] for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]}
+        schedule = {
+            day: []
+            for day in [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday",
+            ]
+        }
         focus_subjects = self._prioritize_subjects(subjects_mastery)
-        remediation_tasks = self._generate_remediation_tasks(knowledge_gaps, grade, grade_band)
+        remediation_tasks = self._generate_remediation_tasks(
+            knowledge_gaps, grade, grade_band
+        )
         grade_tasks = self._generate_grade_tasks(focus_subjects, grade, grade_band)
 
-        target_remediation = min(len(remediation_tasks), max(1, round((len(remediation_tasks) + len(grade_tasks)) * gap_ratio))) if remediation_tasks else 0
-        target_grade = min(len(grade_tasks), max(1, (len(remediation_tasks) + len(grade_tasks)) - target_remediation)) if grade_tasks else 0
-        selected_tasks = remediation_tasks[:target_remediation] + grade_tasks[:target_grade]
+        target_remediation = (
+            min(
+                len(remediation_tasks),
+                max(1, round((len(remediation_tasks) + len(grade_tasks)) * gap_ratio)),
+            )
+            if remediation_tasks
+            else 0
+        )
+        target_grade = (
+            min(
+                len(grade_tasks),
+                max(
+                    1, (len(remediation_tasks) + len(grade_tasks)) - target_remediation
+                ),
+            )
+            if grade_tasks
+            else 0
+        )
+        selected_tasks = (
+            remediation_tasks[:target_remediation] + grade_tasks[:target_grade]
+        )
         if not selected_tasks:
-            selected_tasks = self._generate_grade_tasks(list(CAPS_SUBJECTS.keys()), grade, grade_band)[:3]
+            selected_tasks = self._generate_grade_tasks(
+                list(CAPS_SUBJECTS.keys()), grade, grade_band
+            )[:3]
 
-        weekday_slots = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        weekday_slots = [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        ]
         for index, task in enumerate(selected_tasks):
             schedule[weekday_slots[index % len(weekday_slots)]].append(task)
         return schedule
@@ -180,11 +237,17 @@ class StudyPlanService:
 
         Tests and downstream scheduling expect a list of subject codes, not tuples.
         """
-        prioritized = [(subject, score) for subject, score in subjects_mastery.items() if score is not None]
+        prioritized = [
+            (subject, score)
+            for subject, score in subjects_mastery.items()
+            if score is not None
+        ]
         prioritized.sort(key=lambda item: item[1])
         return [subject for subject, _score in prioritized]
 
-    def _generate_remediation_tasks(self, knowledge_gaps: list[str], grade: int, grade_band: str) -> list[dict]:
+    def _generate_remediation_tasks(
+        self, knowledge_gaps: list[str], grade: int, grade_band: str
+    ) -> list[dict]:
         tasks = []
         for gap in knowledge_gaps[:5]:
             subject = self._concept_to_subject(gap)
@@ -203,7 +266,9 @@ class StudyPlanService:
             )
         return tasks
 
-    def _generate_grade_tasks(self, focus_subjects: list[str], grade: int, grade_band: str) -> list[dict]:
+    def _generate_grade_tasks(
+        self, focus_subjects: list[str], grade: int, grade_band: str
+    ) -> list[dict]:
         tasks = []
         focus_areas = GRADE_FOCUS[(0, 3) if grade <= 3 else (4, 7)]
         for subject in focus_subjects[:4]:
@@ -225,25 +290,52 @@ class StudyPlanService:
 
     def _concept_to_subject(self, concept: str) -> str:
         concept_lower = concept.lower()
-        if any(x in concept_lower for x in ["math", "number", "calc", "geom", "algebra", "fraction", "addition", "subtraction", "division"]):
+        if any(
+            x in concept_lower
+            for x in [
+                "math",
+                "number",
+                "calc",
+                "geom",
+                "algebra",
+                "fraction",
+                "addition",
+                "subtraction",
+                "division",
+            ]
+        ):
             return "MATH"
-        if any(x in concept_lower for x in ["read", "write", "phon", "vocab", "gram", "comprehension"]):
+        if any(
+            x in concept_lower
+            for x in ["read", "write", "phon", "vocab", "gram", "comprehension"]
+        ):
             return "ENG"
-        if any(x in concept_lower for x in ["life", "health", "safety", "community", "bio"]):
+        if any(
+            x in concept_lower for x in ["life", "health", "safety", "community", "bio"]
+        ):
             return "LIFE"
-        if any(x in concept_lower for x in ["nature", "phys", "chem", "energy", "matter"]):
+        if any(
+            x in concept_lower for x in ["nature", "phys", "chem", "energy", "matter"]
+        ):
             return "NS"
         if any(x in concept_lower for x in ["history", "geog", "civic"]):
             return "SS"
         return "MATH"
 
-    def _determine_week_focus(self, knowledge_gaps: list[str], subjects_mastery: dict[str, float]) -> str:
+    def _determine_week_focus(
+        self, knowledge_gaps: list[str], subjects_mastery: dict[str, float]
+    ) -> str:
         if knowledge_gaps:
             first_gap = knowledge_gaps[0]
             subject = self._concept_to_subject(first_gap)
-            return f"Focus on {subject}: {first_gap.replace('_', ' ').title()} remediation"
+            return (
+                f"Focus on {subject}: {first_gap.replace('_', ' ').title()} remediation"
+            )
         if subjects_mastery:
-            weakest = min(subjects_mastery.items(), key=lambda item: item[1] if item[1] is not None else 1.0)
+            weakest = min(
+                subjects_mastery.items(),
+                key=lambda item: item[1] if item[1] is not None else 1.0,
+            )
             return f"Strengthen {CAPS_SUBJECTS.get(weakest[0], {}).get('name', weakest[0])} fundamentals"
         return "General review and advancement"
 
@@ -254,7 +346,10 @@ class StudyPlanService:
 
     async def get_current_plan(self, learner_id: UUID):
         result = await self.session.execute(
-            select(StudyPlan).where(StudyPlan.learner_id == learner_id).order_by(StudyPlan.created_at.desc()).limit(1)
+            select(StudyPlan)
+            .where(StudyPlan.learner_id == learner_id)
+            .order_by(StudyPlan.created_at.desc())
+            .limit(1)
         )
         return result.scalar_one_or_none()
 
@@ -270,7 +365,9 @@ class StudyPlanService:
             gap_ratio=gap_ratio,
         )
 
-    def _generate_task_rationale(self, task: dict, subjects_mastery: dict[str, float], knowledge_gaps: list[str]) -> str:
+    def _generate_task_rationale(
+        self, task: dict, subjects_mastery: dict[str, float], knowledge_gaps: list[str]
+    ) -> str:
         task_type = task.get("type", "unknown")
         subject = task.get("subject", "")
         concept = task.get("concept", "")
@@ -299,7 +396,12 @@ class StudyPlanService:
         knowledge_gaps = await self._get_knowledge_gaps(learner_id)
         schedule_with_rationale = {
             day: [
-                {**task, "rationale": self._generate_task_rationale(task, subjects_mastery, knowledge_gaps)}
+                {
+                    **task,
+                    "rationale": self._generate_task_rationale(
+                        task, subjects_mastery, knowledge_gaps
+                    ),
+                }
                 for task in tasks
             ]
             for day, tasks in (plan.schedule or {}).items()

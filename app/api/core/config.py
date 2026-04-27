@@ -2,6 +2,7 @@
 EduBoost SA — Application Configuration
 All settings loaded from environment variables via Pydantic Settings
 """
+
 import os
 import sys
 from functools import lru_cache
@@ -17,7 +18,9 @@ _PLACEHOLDER_SECRETS = {
     "devpassword",
 }
 
-_RUNNING_UNDER_PYTEST = bool(os.getenv("PYTEST_CURRENT_TEST")) or any("pytest" in arg for arg in sys.argv)
+_RUNNING_UNDER_PYTEST = bool(os.getenv("PYTEST_CURRENT_TEST")) or any(
+    "pytest" in arg for arg in sys.argv
+)
 _DEFAULT_APP_ENV = "test" if _RUNNING_UNDER_PYTEST else "development"
 _DEFAULT_DATABASE_URL = (
     "sqlite+aiosqlite:///./.eduboost_test.db"
@@ -28,7 +31,9 @@ _ENV_FILE = None if _RUNNING_UNDER_PYTEST else ".env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=_ENV_FILE, env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=_ENV_FILE, env_file_encoding="utf-8", extra="ignore"
+    )
 
     # Application
     APP_ENV: str = _DEFAULT_APP_ENV
@@ -134,9 +139,15 @@ class Settings(BaseSettings):
             "DATABASE_URL": self.DATABASE_URL,
         }
 
-        missing = [key for key, value in required_non_empty.items() if not value or not value.strip()]
+        missing = [
+            key
+            for key, value in required_non_empty.items()
+            if not value or not value.strip()
+        ]
         if missing:
-            raise ValueError(f"Missing required production settings: {', '.join(missing)}")
+            raise ValueError(
+                f"Missing required production settings: {', '.join(missing)}"
+            )
 
         placeholder_values = [
             key

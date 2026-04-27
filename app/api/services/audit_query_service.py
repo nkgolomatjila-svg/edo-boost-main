@@ -4,6 +4,7 @@ EduBoost SA — Audit Query and Search Service
 Provides functionality to query, search, and filter audit events
 for compliance and transparency purposes.
 """
+
 from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
@@ -17,6 +18,7 @@ from app.api.models.db_models import AuditEvent
 
 class AuditEventType(str, Enum):
     """Types of audit events to filter on."""
+
     ACTION_SUBMITTED = "ACTION_SUBMITTED"
     STAMP_ISSUED = "STAMP_ISSUED"
     STAMP_REJECTED = "STAMP_REJECTED"
@@ -32,6 +34,7 @@ class AuditEventType(str, Enum):
 
 class AuditPillar(str, Enum):
     """Constitutional pillars for audit filtering."""
+
     LEGISLATURE = "LEGISLATURE"
     EXECUTIVE = "EXECUTIVE"
     JUDICIARY = "JUDICIARY"
@@ -57,7 +60,7 @@ class AuditQueryService:
     ) -> dict:
         """
         Query audit events with optional filtering.
-        
+
         Args:
             learner_id: Filter by learner (pseudonymous hash)
             event_type: Filter by event type
@@ -66,7 +69,7 @@ class AuditQueryService:
             end_date: Filter by end date
             limit: Maximum number of results
             offset: Pagination offset
-        
+
         Returns:
             Dictionary with events and metadata
         """
@@ -74,16 +77,16 @@ class AuditQueryService:
 
         if learner_id:
             conditions.append(AuditEvent.learner_hash == str(learner_id))
-        
+
         if event_type:
             conditions.append(AuditEvent.event_type == event_type)
-        
+
         if pillar:
             conditions.append(AuditEvent.pillar == pillar)
-        
+
         if start_date:
             conditions.append(AuditEvent.occurred_at >= start_date)
-        
+
         if end_date:
             conditions.append(AuditEvent.occurred_at <= end_date)
 
@@ -91,23 +94,25 @@ class AuditQueryService:
         query = select(AuditEvent)
         if conditions:
             query = query.where(and_(*conditions))
-        
+
         # Order by date descending (most recent first)
         query = query.order_by(AuditEvent.occurred_at.desc())
-        
+
         # Add pagination
         total_query = select(AuditEvent)
         if conditions:
             total_query = total_query.where(and_(*conditions))
 
         # Get total count
-        result = await self.session.execute(select(AuditEvent).where(and_(*conditions)) if conditions else select(AuditEvent))
+        result = await self.session.execute(
+            select(AuditEvent).where(and_(*conditions))
+            if conditions
+            else select(AuditEvent)
+        )
         total_count = len(result.scalars().all())
 
         # Get paginated results
-        result = await self.session.execute(
-            query.offset(offset).limit(limit)
-        )
+        result = await self.session.execute(query.offset(offset).limit(limit))
         events = result.scalars().all()
 
         return {
@@ -137,7 +142,7 @@ class AuditQueryService:
     ) -> dict:
         """
         Free-text search for audit events.
-        
+
         Searches in event type and payload fields.
         """
         # Get all events for this learner or all events
@@ -147,7 +152,7 @@ class AuditQueryService:
             )
         else:
             result = await self.session.execute(select(AuditEvent))
-        
+
         all_events = result.scalars().all()
 
         # Filter by search query (case-insensitive)
@@ -195,7 +200,7 @@ class AuditQueryService:
     ) -> dict:
         """
         Get complete audit trail for a learner over a time period.
-        
+
         Useful for POPIA compliance audits and parent reviews.
         """
         cutoff_date = datetime.now() - timedelta(days=days)
@@ -262,7 +267,7 @@ class AuditQueryService:
     ) -> dict:
         """
         Generate a compliance report from audit events.
-        
+
         Provides statistics on constitutional adherence, rejections, violations.
         """
         cutoff_date = datetime.now() - timedelta(days=days)
@@ -275,7 +280,7 @@ class AuditQueryService:
 
         # Calculate statistics
         total_events = len(all_events)
-        
+
         # Count by event type
         event_counts = {}
         for event in all_events:
@@ -312,7 +317,9 @@ class AuditQueryService:
             "constitutional_health": {
                 "violations_count": violation_count,
                 "rejections_count": rejection_count,
-                "approval_rate": ((total_events - rejection_count) / total_events * 100) if total_events > 0 else 0,
+                "approval_rate": ((total_events - rejection_count) / total_events * 100)
+                if total_events > 0
+                else 0,
             },
             "llm_performance": {
                 "total_calls": llm_total,
@@ -341,15 +348,23 @@ class AuditQueryService:
         recommendations = []
 
         if violation_count > 5:
-            recommendations.append("High constitutional violations detected. Review judiciary rules and data handling practices.")
-        
+            recommendations.append(
+                "High constitutional violations detected. Review judiciary rules and data handling practices."
+            )
+
         if rejection_count > total_events * 0.1:
-            recommendations.append("High request rejection rate. Review action submissions for policy compliance.")
-        
+            recommendations.append(
+                "High request rejection rate. Review action submissions for policy compliance."
+            )
+
         if llm_success_rate < 95:
-            recommendations.append("LLM call failure rate is concerning. Investigate inference gateway stability.")
-        
+            recommendations.append(
+                "LLM call failure rate is concerning. Investigate inference gateway stability."
+            )
+
         if not recommendations:
-            recommendations.append("Audit trail shows good compliance. Continue current practices.")
+            recommendations.append(
+                "Audit trail shows good compliance. Continue current practices."
+            )
 
         return recommendations

@@ -1,4 +1,5 @@
 """EduBoost SA — Diagnostic Router (IRT Adaptive Assessment)"""
+
 import json
 import uuid
 from datetime import datetime
@@ -120,7 +121,11 @@ async def run_diagnostic(request: DiagnosticRequest):
     except ValueError as e:
         raise HTTPException(
             status_code=400,
-            detail=ErrorResponse(error="Invalid subject code", code="INVALID_SUBJECT_CODE", details={"subject_code": request.subject_code}).model_dump(),
+            detail=ErrorResponse(
+                error="Invalid subject code",
+                code="INVALID_SUBJECT_CODE",
+                details={"subject_code": request.subject_code},
+            ).model_dump(),
         ) from e
 
     try:
@@ -131,7 +136,10 @@ async def run_diagnostic(request: DiagnosticRequest):
                 operation="RUN_DIAGNOSTIC",
                 learner_id=str(request.learner_id),
                 grade=request.grade,
-                params={"subject_code": request.subject_code, "max_questions": request.max_questions},
+                params={
+                    "subject_code": request.subject_code,
+                    "max_questions": request.max_questions,
+                },
             )
         )
 
@@ -164,10 +172,13 @@ async def run_diagnostic(request: DiagnosticRequest):
 
         # Note: Full response persistence would require tracking responses through orchestrator
         # For now, we log that the session was persisted
-        print(f"Diagnostic session {session_id} persisted for learner {request.learner_id}")
+        print(
+            f"Diagnostic session {session_id} persisted for learner {request.learner_id}"
+        )
 
         # Trigger background task to auto-refresh the study plan with new gaps
         from app.api.tasks.plan_tasks import refresh_study_plan_task
+
         refresh_study_plan_task.delay(str(request.learner_id))
 
         return DiagnosticRunResponse(
@@ -192,13 +203,13 @@ async def run_diagnostic(request: DiagnosticRequest):
                 details={"reason": str(e)},
             ).model_dump(),
         ) from e
- 
- 
+
+
 @router.post("/start", response_model=DiagnosticStartResponse)
 async def start_diagnostic(request: DiagnosticRequest):
     """Start a new interactive diagnostic session."""
     from app.api.orchestrator import OrchestratorRequest, get_orchestrator
-    
+
     # Check item bank depth before session start
     async with AsyncSessionFactory() as session:
         result = await session.execute(
@@ -207,11 +218,11 @@ async def start_diagnostic(request: DiagnosticRequest):
                 FROM item_bank
                 WHERE subject_code = :subject_code AND grade_level = :grade_level AND is_active = TRUE
             """),
-            {"subject_code": request.subject_code, "grade_level": request.grade}
+            {"subject_code": request.subject_code, "grade_level": request.grade},
         )
         item_count_row = result.mappings().first()
-        item_count = item_count_row['item_count'] if item_count_row else 0
-    
+        item_count = item_count_row["item_count"] if item_count_row else 0
+
     # Require at least 5 items per grade/subject for adaptive testing
     MIN_ITEMS_REQUIRED = 5
     if item_count < MIN_ITEMS_REQUIRED:
@@ -224,11 +235,11 @@ async def start_diagnostic(request: DiagnosticRequest):
                     "available_items": item_count,
                     "required_items": MIN_ITEMS_REQUIRED,
                     "subject_code": request.subject_code,
-                    "grade_level": request.grade
-                }
+                    "grade_level": request.grade,
+                },
             ).model_dump(),
         )
- 
+
     orch = get_orchestrator()
     result = await orch.run(
         OrchestratorRequest(
@@ -238,14 +249,14 @@ async def start_diagnostic(request: DiagnosticRequest):
             params={"subject_code": request.subject_code},
         )
     )
- 
+
     if not result.success:
         raise HTTPException(status_code=500, detail=result.error)
- 
+
     output = result.output
     first_item_data = output.get("first_item")
     state = output.get("session_state", {})
- 
+
     # Create session in DB
     session_id = uuid.uuid4()
     async with AsyncSessionFactory() as session:
@@ -269,22 +280,36 @@ async def start_diagnostic(request: DiagnosticRequest):
             },
         )
         await session.commit()
- 
+
     first_item = None
     if first_item_data:
         first_item = DiagnosticItem(
-            item_id=first_item_data.get("item_id") if isinstance(first_item_data, dict) else first_item_data.item_id,
-            question_text=first_item_data.get("question_text") if isinstance(first_item_data, dict) else first_item_data.question_text,
-            options=first_item_data.get("options") if isinstance(first_item_data, dict) else first_item_data.options,
-            story_context=first_item_data.get("story_context") if isinstance(first_item_data, dict) else first_item_data.story_context,
-            difficulty_label=first_item_data.get("difficulty_label") if isinstance(first_item_data, dict) else first_item_data.difficulty_label,
+            item_id=first_item_data.get("item_id")
+            if isinstance(first_item_data, dict)
+            else first_item_data.item_id,
+            question_text=first_item_data.get("question_text")
+            if isinstance(first_item_data, dict)
+            else first_item_data.question_text,
+            options=first_item_data.get("options")
+            if isinstance(first_item_data, dict)
+            else first_item_data.options,
+            story_context=first_item_data.get("story_context")
+            if isinstance(first_item_data, dict)
+            else first_item_data.story_context,
+            difficulty_label=first_item_data.get("difficulty_label")
+            if isinstance(first_item_data, dict)
+            else first_item_data.difficulty_label,
         )
- 
-    return DiagnosticStartResponse(success=True, session_id=session_id, first_item=first_item)
- 
- 
+
+    return DiagnosticStartResponse(
+        success=True, session_id=session_id, first_item=first_item
+    )
+
+
 @router.post("/session/{session_id}/respond", response_model=DiagnosticSubmitResponse)
-async def submit_diagnostic_response(session_id: uuid.UUID, request: DiagnosticSubmitRequest):
+async def submit_diagnostic_response(
+    session_id: uuid.UUID, request: DiagnosticSubmitRequest
+):
     """Submit a response to the current item and get the next one."""
     from app.api.orchestrator import OrchestratorRequest, get_orchestrator
     from app.api.ml.irt_engine import ITEM_BANK
@@ -294,32 +319,44 @@ async def submit_diagnostic_response(session_id: uuid.UUID, request: DiagnosticS
     if request.selected_index is not None:
         item = ITEM_BANK.get(request.item_id)
         if item:
-            is_correct = (item.correct_index == request.selected_index)
-    
+            is_correct = item.correct_index == request.selected_index
+
     if is_correct is None:
-        raise HTTPException(status_code=400, detail="Either is_correct or selected_index must be provided")
+        raise HTTPException(
+            status_code=400,
+            detail="Either is_correct or selected_index must be provided",
+        )
 
     async with AsyncSessionFactory() as session:
         result = await session.execute(
             text("SELECT * FROM diagnostic_sessions WHERE session_id = :session_id"),
-            {"session_id": session_id}
+            {"session_id": session_id},
         )
         session_row = result.mappings().first()
- 
+
     if not session_row:
         raise HTTPException(status_code=404, detail="Session not found")
- 
+
     if session_row["status"] == "completed":
         raise HTTPException(status_code=400, detail="Session already completed")
- 
+
     async with AsyncSessionFactory() as session:
         result = await session.execute(
-            text("SELECT item_id, is_correct, time_taken_ms FROM diagnostic_responses WHERE session_id = :session_id"),
-            {"session_id": session_id}
+            text(
+                "SELECT item_id, is_correct, time_taken_ms FROM diagnostic_responses WHERE session_id = :session_id"
+            ),
+            {"session_id": session_id},
         )
         resp_rows = result.mappings().all()
-        previous_responses = [{"item_id": r["item_id"], "is_correct": r["is_correct"], "time_on_task_ms": r["time_taken_ms"]} for r in resp_rows]
- 
+        previous_responses = [
+            {
+                "item_id": r["item_id"],
+                "is_correct": r["is_correct"],
+                "time_on_task_ms": r["time_taken_ms"],
+            }
+            for r in resp_rows
+        ]
+
     orch = get_orchestrator()
     orch_result = await orch.run(
         OrchestratorRequest(
@@ -338,13 +375,13 @@ async def submit_diagnostic_response(session_id: uuid.UUID, request: DiagnosticS
             },
         )
     )
- 
+
     if not orch_result.success:
         raise HTTPException(status_code=500, detail=orch_result.error)
- 
+
     output = orch_result.output
     state = output["session_state"]
- 
+
     async with AsyncSessionFactory() as session:
         await session.execute(
             text("""
@@ -366,12 +403,12 @@ async def submit_diagnostic_response(session_id: uuid.UUID, request: DiagnosticS
                 "sem_before": session_row["standard_error"],
                 "sem_after": state["sem"],
                 "at": datetime.utcnow(),
-            }
+            },
         )
- 
+
         status_val = "completed" if output["is_complete"] else "in_progress"
         completed_at = datetime.utcnow() if output["is_complete"] else None
-        
+
         await session.execute(
             text("""
                 UPDATE diagnostic_sessions 
@@ -385,27 +422,36 @@ async def submit_diagnostic_response(session_id: uuid.UUID, request: DiagnosticS
                 "theta": state["theta"],
                 "sem": state["sem"],
                 "count": state["responses_count"],
-                "gaps": json.dumps(output["gap_report"]["knowledge_gaps"]) if output["is_complete"] else '[]',
+                "gaps": json.dumps(output["gap_report"]["knowledge_gaps"])
+                if output["is_complete"]
+                else "[]",
                 "cat": completed_at,
-            }
+            },
         )
         await session.commit()
- 
+
     next_item = None
     if output["next_item_data"]:
         ni = output["next_item_data"]
         next_item = DiagnosticItem(
             item_id=ni.get("item_id") if isinstance(ni, dict) else ni.item_id,
-            question_text=ni.get("question_text") if isinstance(ni, dict) else ni.question_text,
+            question_text=ni.get("question_text")
+            if isinstance(ni, dict)
+            else ni.question_text,
             options=ni.get("options") if isinstance(ni, dict) else ni.options,
-            story_context=ni.get("story_context") if isinstance(ni, dict) else ni.story_context,
-            difficulty_label=ni.get("difficulty_label") if isinstance(ni, dict) else ni.difficulty_label,
+            story_context=ni.get("story_context")
+            if isinstance(ni, dict)
+            else ni.story_context,
+            difficulty_label=ni.get("difficulty_label")
+            if isinstance(ni, dict)
+            else ni.difficulty_label,
         )
- 
+
     if output["is_complete"]:
         from app.api.tasks.plan_tasks import refresh_study_plan_task
+
         refresh_study_plan_task.delay(str(session_row["learner_id"]))
- 
+
     return DiagnosticSubmitResponse(
         success=True,
         is_complete=output["is_complete"],
@@ -427,7 +473,11 @@ async def get_diagnostic_items(subject_code: str, grade: int):
     except ValueError as e:
         raise HTTPException(
             status_code=400,
-            detail=ErrorResponse(error="Invalid subject", code="INVALID_SUBJECT_CODE", details={"subject_code": subject_code}).model_dump(),
+            detail=ErrorResponse(
+                error="Invalid subject",
+                code="INVALID_SUBJECT_CODE",
+                details={"subject_code": subject_code},
+            ).model_dump(),
         ) from e
 
     items = [
@@ -441,14 +491,18 @@ async def get_diagnostic_items(subject_code: str, grade: int):
         for i in SAMPLE_ITEMS
         if i.subject == subject and i.grade == grade
     ]
-    return DiagnosticItemsResponse(subject=subject_code, grade=grade, items=items, count=len(items))
+    return DiagnosticItemsResponse(
+        subject=subject_code, grade=grade, items=items, count=len(items)
+    )
 
 
 @router.get("/history/{learner_id}")
-async def get_diagnostic_history(learner_id: uuid.UUID, session: AsyncSession = Depends(get_db)):
+async def get_diagnostic_history(
+    learner_id: uuid.UUID, session: AsyncSession = Depends(get_db)
+):
     """Get diagnostic session history for a learner."""
     result = await session.execute(
-            text("""
+        text("""
                 SELECT session_id, subject_code, grade_level, status, theta_estimate,
                        standard_error, items_administered, final_mastery_score, 
                        knowledge_gaps, started_at, completed_at
@@ -457,26 +511,28 @@ async def get_diagnostic_history(learner_id: uuid.UUID, session: AsyncSession = 
                 ORDER BY started_at DESC
                 LIMIT 50
             """),
-            {"learner_id": str(learner_id)},
-        )
+        {"learner_id": str(learner_id)},
+    )
     rows = result.fetchall()
 
     sessions = []
     for row in rows:
-        sessions.append({
-            "session_id": str(row[0]),
-            "subject_code": row[1],
-            "grade_level": row[2],
-            "status": row[3],
-            "theta_estimate": row[4],
-            "standard_error": row[5],
-            "items_administered": row[6],
-            "final_mastery_score": row[7],
-            "knowledge_gaps": row[8] or [],
-            "started_at": row[9].isoformat() if row[9] else None,
-            "completed_at": row[10].isoformat() if row[10] else None,
-        })
-    
+        sessions.append(
+            {
+                "session_id": str(row[0]),
+                "subject_code": row[1],
+                "grade_level": row[2],
+                "status": row[3],
+                "theta_estimate": row[4],
+                "standard_error": row[5],
+                "items_administered": row[6],
+                "final_mastery_score": row[7],
+                "knowledge_gaps": row[8] or [],
+                "started_at": row[9].isoformat() if row[9] else None,
+                "completed_at": row[10].isoformat() if row[10] else None,
+            }
+        )
+
     return {"learner_id": str(learner_id), "sessions": sessions, "count": len(sessions)}
 
 
@@ -486,7 +542,7 @@ async def get_diagnostic_session(session_id: uuid.UUID):
     async with AsyncSessionFactory() as session:
         result = await session.execute(
             text("SELECT * FROM diagnostic_sessions WHERE session_id = :session_id"),
-            {"session_id": session_id}
+            {"session_id": session_id},
         )
         row = result.mappings().first()
 
@@ -496,10 +552,10 @@ async def get_diagnostic_session(session_id: uuid.UUID):
             detail=ErrorResponse(
                 error="Diagnostic session not found",
                 code="SESSION_NOT_FOUND",
-                details={"session_id": str(session_id)}
-            ).model_dump()
+                details={"session_id": str(session_id)},
+            ).model_dump(),
         )
-        
+
     return dict(row)
 
 
@@ -511,15 +567,17 @@ async def resume_diagnostic_session(session_id: uuid.UUID):
     """
     async with AsyncSessionFactory() as session:
         result = await session.execute(
-            text("SELECT status FROM diagnostic_sessions WHERE session_id = :session_id"),
-            {"session_id": session_id}
+            text(
+                "SELECT status FROM diagnostic_sessions WHERE session_id = :session_id"
+            ),
+            {"session_id": session_id},
         )
         status = result.scalar()
 
     if not status:
         raise HTTPException(status_code=404, detail="Session not found")
-        
-    if status == 'completed':
+
+    if status == "completed":
         raise HTTPException(status_code=400, detail="Cannot resume a completed session")
 
     # Boilerplate response until full state-machine is wired
@@ -527,17 +585,18 @@ async def resume_diagnostic_session(session_id: uuid.UUID):
         "success": True,
         "session_id": str(session_id),
         "status": status,
-        "message": "Session resumed. Awaiting next item."
+        "message": "Session resumed. Awaiting next item.",
     }
 
 
 # ── Diagnostic Benchmarking Endpoints ─────────────────────────────────────────
 
+
 @router.get("/benchmark/metrics")
 async def get_diagnostic_benchmark_metrics(days: int = 30):
     """
     Get diagnostic engine benchmark metrics.
-    
+
     Returns performance statistics including:
     - Average session duration
     - Accuracy metrics
@@ -545,22 +604,30 @@ async def get_diagnostic_benchmark_metrics(days: int = 30):
     - SLO compliance status
     """
     from app.api.services.diagnostic_benchmark_service import DiagnosticBenchmarkService
-    
+
     async with AsyncSessionFactory() as session:
         try:
             service = DiagnosticBenchmarkService(session)
             metrics = await service.get_benchmark_metrics(days=days)
-            
+
             return {
                 "success": True,
                 "metrics": {
                     "period_days": metrics.period_days,
                     "total_sessions": metrics.total_sessions,
                     "sessions_in_period": metrics.sessions_in_period,
-                    "avg_session_duration_ms": round(metrics.avg_session_duration_ms, 2),
-                    "p95_session_duration_ms": round(metrics.p95_session_duration_ms, 2),
-                    "min_session_duration_ms": round(metrics.min_session_duration_ms, 2),
-                    "max_session_duration_ms": round(metrics.max_session_duration_ms, 2),
+                    "avg_session_duration_ms": round(
+                        metrics.avg_session_duration_ms, 2
+                    ),
+                    "p95_session_duration_ms": round(
+                        metrics.p95_session_duration_ms, 2
+                    ),
+                    "min_session_duration_ms": round(
+                        metrics.min_session_duration_ms, 2
+                    ),
+                    "max_session_duration_ms": round(
+                        metrics.max_session_duration_ms, 2
+                    ),
                     "avg_accuracy": round(metrics.avg_accuracy, 4),
                     "min_accuracy": round(metrics.min_accuracy, 4),
                     "max_accuracy": round(metrics.max_accuracy, 4),
@@ -569,77 +636,87 @@ async def get_diagnostic_benchmark_metrics(days: int = 30):
                 },
                 "slo_status": {
                     "targets_met": metrics.targets_met,
-                    "violations": metrics.violations if metrics.violations else ["None - all SLOs met!"],
+                    "violations": metrics.violations
+                    if metrics.violations
+                    else ["None - all SLOs met!"],
                 },
             }
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Benchmark metrics failed: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Benchmark metrics failed: {e}"
+            ) from e
 
 
 @router.get("/benchmark/report")
 async def get_diagnostic_benchmark_report(days: int = 30):
     """
     Get comprehensive diagnostic benchmark report.
-    
+
     Includes overall metrics, per-subject performance, per-grade performance,
     and SLO compliance status.
     """
     from app.api.services.diagnostic_benchmark_service import DiagnosticBenchmarkService
-    
+
     async with AsyncSessionFactory() as session:
         try:
             service = DiagnosticBenchmarkService(session)
             report = await service.generate_benchmark_report(days=days)
-            
+
             return {
                 "success": True,
                 "report": report,
             }
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Benchmark report failed: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Benchmark report failed: {e}"
+            ) from e
 
 
 @router.get("/benchmark/by-subject")
 async def get_diagnostic_metrics_by_subject(days: int = 30):
     """
     Get diagnostic metrics broken down by subject.
-    
+
     Useful for identifying which subject assessments may need calibration.
     """
     from app.api.services.diagnostic_benchmark_service import DiagnosticBenchmarkService
-    
+
     async with AsyncSessionFactory() as session:
         try:
             service = DiagnosticBenchmarkService(session)
             by_subject = await service.get_accuracy_by_subject(days=days)
-            
+
             return {
                 "success": True,
                 "period_days": days,
                 "by_subject": by_subject,
             }
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Subject metrics failed: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Subject metrics failed: {e}"
+            ) from e
 
 
 @router.get("/benchmark/by-grade")
 async def get_diagnostic_metrics_by_grade(days: int = 30):
     """
     Get diagnostic metrics broken down by grade level.
-    
+
     Useful for identifying grade-level trends in assessment performance.
     """
     from app.api.services.diagnostic_benchmark_service import DiagnosticBenchmarkService
-    
+
     async with AsyncSessionFactory() as session:
         try:
             service = DiagnosticBenchmarkService(session)
             by_grade = await service.get_accuracy_by_grade(days=days)
-            
+
             return {
                 "success": True,
                 "period_days": days,
                 "by_grade": by_grade,
             }
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Grade metrics failed: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Grade metrics failed: {e}"
+            ) from e

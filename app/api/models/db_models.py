@@ -2,10 +2,21 @@
 EduBoost SA — SQLAlchemy Database Models
 POPIA: PII columns are AES-256 encrypted at rest via Supabase Vault
 """
+
 import uuid
 from sqlalchemy import (
-    Column, String, Integer, Float, Boolean, DateTime,
-    ForeignKey, Text, SmallInteger, JSON, Index, CheckConstraint
+    Column,
+    String,
+    Integer,
+    Float,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Text,
+    SmallInteger,
+    JSON,
+    Index,
+    CheckConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import relationship
@@ -16,10 +27,16 @@ from app.api.core.database import Base
 
 class LearnerIdentity(Base):
     """PII SILO — accessible ONLY via parent JWT. Never joined to learning tables in LLM context."""
+
     __tablename__ = "learner_identities"
 
     identity_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    pseudonym_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id"), unique=True, nullable=False)
+    pseudonym_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("learners.learner_id"),
+        unique=True,
+        nullable=False,
+    )
     full_name_encrypted = Column(Text)
     date_of_birth_encrypted = Column(Text)
     guardian_email_encrypted = Column(Text, nullable=False)
@@ -28,35 +45,50 @@ class LearnerIdentity(Base):
     data_deletion_requested = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    __table_args__ = (
-        Index("ix_learner_identities_pseudonym", "pseudonym_id"),
-    )
+    __table_args__ = (Index("ix_learner_identities_pseudonym", "pseudonym_id"),)
 
 
 class Learner(Base):
     """PSEUDONYMOUS PROFILE — safe for application use. Contains ZERO directly identifying information."""
+
     __tablename__ = "learners"
 
     learner_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     grade = Column(SmallInteger, nullable=False)
     home_language = Column(String(10), default="eng")
     avatar_id = Column(SmallInteger, default=0)
-    learning_style = Column(JSON, default={"visual": 0.6, "auditory": 0.2, "kinesthetic": 0.2})
+    learning_style = Column(
+        JSON, default={"visual": 0.6, "auditory": 0.2, "kinesthetic": 0.2}
+    )
     overall_mastery = Column(Float, default=0.0)
     streak_days = Column(SmallInteger, default=0)
     total_xp = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    last_active_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_active_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
-    subject_mastery = relationship("SubjectMastery", back_populates="learner", cascade="all, delete-orphan")
-    session_events = relationship("SessionEvent", back_populates="learner", cascade="all, delete-orphan")
-    study_plans = relationship("StudyPlan", back_populates="learner", cascade="all, delete-orphan")
-    diagnostic_sessions = relationship("DiagnosticSession", back_populates="learner", cascade="all, delete-orphan")
-    learner_badges = relationship("LearnerBadge", back_populates="learner", cascade="all, delete-orphan")
+    subject_mastery = relationship(
+        "SubjectMastery", back_populates="learner", cascade="all, delete-orphan"
+    )
+    session_events = relationship(
+        "SessionEvent", back_populates="learner", cascade="all, delete-orphan"
+    )
+    study_plans = relationship(
+        "StudyPlan", back_populates="learner", cascade="all, delete-orphan"
+    )
+    diagnostic_sessions = relationship(
+        "DiagnosticSession", back_populates="learner", cascade="all, delete-orphan"
+    )
+    learner_badges = relationship(
+        "LearnerBadge", back_populates="learner", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         CheckConstraint("grade >= 0 AND grade <= 7", name="ck_learner_grade"),
-        CheckConstraint("overall_mastery >= 0.0 AND overall_mastery <= 1.0", name="ck_mastery_range"),
+        CheckConstraint(
+            "overall_mastery >= 0.0 AND overall_mastery <= 1.0", name="ck_mastery_range"
+        ),
         Index("ix_learners_last_active", "last_active_at"),
     )
 
@@ -65,7 +97,11 @@ class SubjectMastery(Base):
     __tablename__ = "subject_mastery"
 
     mastery_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    learner_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id", ondelete="CASCADE"), nullable=False)
+    learner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("learners.learner_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     subject_code = Column(String(20), nullable=False)
     grade_level = Column(SmallInteger, nullable=False)
     mastery_score = Column(Float, default=0.0)
@@ -74,12 +110,17 @@ class SubjectMastery(Base):
     concepts_in_progress = Column(_string_list, default=list)
     knowledge_gaps = Column(JSON, default=[])
     last_assessed_at = Column(DateTime(timezone=True), nullable=True)
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     learner = relationship("Learner", back_populates="subject_mastery")
 
     __table_args__ = (
-        CheckConstraint("mastery_score >= 0.0 AND mastery_score <= 1.0", name="ck_subject_mastery_range"),
+        CheckConstraint(
+            "mastery_score >= 0.0 AND mastery_score <= 1.0",
+            name="ck_subject_mastery_range",
+        ),
         Index("ix_subject_mastery_learner", "learner_id"),
     )
 
@@ -88,7 +129,11 @@ class SessionEvent(Base):
     __tablename__ = "session_events"
 
     event_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    learner_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id", ondelete="CASCADE"), nullable=False)
+    learner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("learners.learner_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     session_id = Column(UUID(as_uuid=True), nullable=False)
     lesson_id = Column(String(50))
     event_type = Column(String(30))
@@ -113,7 +158,11 @@ class StudyPlan(Base):
     __tablename__ = "study_plans"
 
     plan_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    learner_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id", ondelete="CASCADE"), nullable=False)
+    learner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("learners.learner_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     week_start = Column(DateTime(timezone=True), nullable=False)
     schedule = Column(JSON, nullable=False)
     gap_ratio = Column(Float, default=0.4)
@@ -123,9 +172,7 @@ class StudyPlan(Base):
 
     learner = relationship("Learner", back_populates="study_plans")
 
-    __table_args__ = (
-        Index("ix_study_plans_learner", "learner_id"),
-    )
+    __table_args__ = (Index("ix_study_plans_learner", "learner_id"),)
 
 
 class PromptTemplate(Base):
@@ -160,13 +207,20 @@ class ConsentAudit(Base):
 
 class DiagnosticSession(Base):
     """Tracks diagnostic assessment sessions and outcomes."""
+
     __tablename__ = "diagnostic_sessions"
 
     session_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    learner_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id", ondelete="CASCADE"), nullable=False)
+    learner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("learners.learner_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     subject_code = Column(String(20), nullable=False)
     grade_level = Column(SmallInteger, nullable=False)
-    status = Column(String(20), default="in_progress")  # in_progress, completed, abandoned
+    status = Column(
+        String(20), default="in_progress"
+    )  # in_progress, completed, abandoned
     theta_estimate = Column(Float)
     standard_error = Column(Float)
     items_administered = Column(Integer, default=0)
@@ -177,19 +231,24 @@ class DiagnosticSession(Base):
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
     learner = relationship("Learner", back_populates="diagnostic_sessions")
-    responses = relationship("DiagnosticResponse", back_populates="session", cascade="all, delete-orphan")
-
-    __table_args__ = (
-        Index("ix_diagnostic_sessions_learner", "learner_id"),
+    responses = relationship(
+        "DiagnosticResponse", back_populates="session", cascade="all, delete-orphan"
     )
+
+    __table_args__ = (Index("ix_diagnostic_sessions_learner", "learner_id"),)
 
 
 class DiagnosticResponse(Base):
     """Individual item responses within a diagnostic session."""
+
     __tablename__ = "diagnostic_responses"
 
     response_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    session_id = Column(UUID(as_uuid=True), ForeignKey("diagnostic_sessions.session_id", ondelete="CASCADE"), nullable=False)
+    session_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("diagnostic_sessions.session_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     item_id = Column(String(50), nullable=False)
     learner_response = Column(Text, nullable=False)
     is_correct = Column(Boolean, nullable=False)
@@ -203,13 +262,12 @@ class DiagnosticResponse(Base):
 
     session = relationship("DiagnosticSession", back_populates="responses")
 
-    __table_args__ = (
-        Index("ix_diagnostic_responses_session", "session_id"),
-    )
+    __table_args__ = (Index("ix_diagnostic_responses_session", "session_id"),)
 
 
 class Badge(Base):
     """Available badges in the gamification system."""
+
     __tablename__ = "badges"
 
     badge_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -227,10 +285,15 @@ class Badge(Base):
 
 class LearnerBadge(Base):
     """Earned badges by learners."""
+
     __tablename__ = "learner_badges"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    learner_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id", ondelete="CASCADE"), nullable=False)
+    learner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("learners.learner_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     badge_id = Column(UUID(as_uuid=True), ForeignKey("badges.badge_id"), nullable=False)
     earned_at = Column(DateTime(timezone=True), server_default=func.now())
     evidence = Column(JSON)
@@ -238,13 +301,12 @@ class LearnerBadge(Base):
     learner = relationship("Learner")
     badge = relationship("Badge")
 
-    __table_args__ = (
-        Index("ix_learner_badges_learner", "learner_id"),
-    )
+    __table_args__ = (Index("ix_learner_badges_learner", "learner_id"),)
 
 
 class ItemBank(Base):
     """IRT item bank for diagnostic assessments."""
+
     __tablename__ = "item_bank"
 
     item_id = Column(String(50), primary_key=True)
@@ -271,6 +333,7 @@ class ItemBank(Base):
 
 class AuditEvent(Base):
     """Immutable audit events for compliance."""
+
     __tablename__ = "audit_events"
 
     event_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -294,6 +357,7 @@ class AuditEvent(Base):
 
 class Lesson(Base):
     """CAPS-aligned lesson content for Grade R-7."""
+
     __tablename__ = "lessons"
 
     lesson_id = Column(String(50), primary_key=True)
@@ -312,10 +376,14 @@ class Lesson(Base):
     is_active = Column(Boolean, default=True)
     version = Column(Integer, default=1)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
     __table_args__ = (
-        CheckConstraint("grade_level >= 0 AND grade_level <= 7", name="ck_lesson_grade"),
+        CheckConstraint(
+            "grade_level >= 0 AND grade_level <= 7", name="ck_lesson_grade"
+        ),
         Index("ix_lessons_subject_grade", "subject_code", "grade_level"),
         Index("ix_lessons_topic", "topic"),
     )
@@ -323,6 +391,7 @@ class Lesson(Base):
 
 class Assessment(Base):
     """Assessments / quizzes / tests for learners."""
+
     __tablename__ = "assessments"
 
     assessment_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -336,23 +405,38 @@ class Assessment(Base):
     questions = Column(JSON, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
-    attempts = relationship("AssessmentAttempt", back_populates="assessment", cascade="all, delete-orphan")
+    attempts = relationship(
+        "AssessmentAttempt", back_populates="assessment", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
-        CheckConstraint("grade_level >= 0 AND grade_level <= 7", name="ck_assessment_grade"),
+        CheckConstraint(
+            "grade_level >= 0 AND grade_level <= 7", name="ck_assessment_grade"
+        ),
         Index("ix_assessments_subject_grade", "subject_code", "grade_level"),
     )
 
 
 class AssessmentAttempt(Base):
     """Learner attempts at an assessment."""
+
     __tablename__ = "assessment_attempts"
 
     attempt_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    learner_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id", ondelete="CASCADE"), nullable=False)
-    assessment_id = Column(UUID(as_uuid=True), ForeignKey("assessments.assessment_id", ondelete="CASCADE"), nullable=False)
+    learner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("learners.learner_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    assessment_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("assessments.assessment_id", ondelete="CASCADE"),
+        nullable=False,
+    )
     score = Column(Float)
     marks_obtained = Column(Integer)
     time_taken_seconds = Column(Integer)
@@ -370,11 +454,18 @@ class AssessmentAttempt(Base):
 
 class Report(Base):
     """Generated reports for learners and guardians."""
+
     __tablename__ = "reports"
 
     report_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    learner_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id", ondelete="CASCADE"), nullable=False)
-    report_type = Column(String(30), nullable=False)  # progress, diagnostic, weekly, monthly, parent
+    learner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("learners.learner_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    report_type = Column(
+        String(30), nullable=False
+    )  # progress, diagnostic, weekly, monthly, parent
     title = Column(String(200), nullable=False)
     content = Column(JSON, nullable=False)
     summary = Column(Text)
@@ -391,6 +482,7 @@ class Report(Base):
 
 class ParentAccount(Base):
     """Guardian / parent accounts (PII encrypted)."""
+
     __tablename__ = "parent_accounts"
 
     parent_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -401,22 +493,36 @@ class ParentAccount(Base):
     is_verified = Column(Boolean, default=False)
     last_login_at = Column(DateTime(timezone=True), nullable=True)
 
-    learner_links = relationship("ParentLearnerLink", back_populates="parent", cascade="all, delete-orphan")
+    learner_links = relationship(
+        "ParentLearnerLink", back_populates="parent", cascade="all, delete-orphan"
+    )
 
 
 class ParentLearnerLink(Base):
     """Many-to-many link between guardian accounts and learner profiles."""
+
     __tablename__ = "parent_learner_links"
 
     link_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    parent_id = Column(UUID(as_uuid=True), ForeignKey("parent_accounts.parent_id", ondelete="CASCADE"), nullable=False)
-    learner_id = Column(UUID(as_uuid=True), ForeignKey("learners.learner_id", ondelete="CASCADE"), nullable=False)
-    relationship = Column(String(20), default="guardian")  # guardian, parent, grandparent
+    parent_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("parent_accounts.parent_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    learner_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("learners.learner_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    relationship = Column(
+        String(20), default="guardian"
+    )  # guardian, parent, grandparent
     is_verified = Column(Boolean, default=False)
     verified_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     import sqlalchemy.orm as sa_orm
+
     parent = sa_orm.relationship("ParentAccount", back_populates="learner_links")
 
     __table_args__ = (
@@ -436,11 +542,11 @@ class DummyDataPoint(Base):
     __tablename__ = "dummy_data_points"
 
     data_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    kind = Column(String(50), nullable=False, index=True)  # e.g. "event", "telemetry", "synthetic"
+    kind = Column(
+        String(50), nullable=False, index=True
+    )  # e.g. "event", "telemetry", "synthetic"
     payload = Column(JSON, nullable=False)
     is_persistent = Column(Boolean, default=False, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
-    __table_args__ = (
-        Index("ix_dummy_data_points_kind_created", "kind", "created_at"),
-    )
+    __table_args__ = (Index("ix_dummy_data_points_kind_created", "kind", "created_at"),)

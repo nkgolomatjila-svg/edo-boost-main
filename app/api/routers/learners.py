@@ -1,4 +1,5 @@
 """EduBoost SA — Learners Router (Pseudonymous CRUD)"""
+
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -32,6 +33,7 @@ async def create_learner(request: LearnerCreateRequest, db=Depends(get_db)):
         try:
             # Convert learning_style dict to JSON string
             import json
+
             style_json = json.dumps(request.learning_style)
             await session.execute(
                 text("""
@@ -50,7 +52,11 @@ async def create_learner(request: LearnerCreateRequest, db=Depends(get_db)):
         except Exception as e:
             raise HTTPException(
                 status_code=500,
-                detail=ErrorResponse(error="Failed to create learner", code="LEARNER_CREATE_FAILED", details={"reason": str(e)}).model_dump(),
+                detail=ErrorResponse(
+                    error="Failed to create learner",
+                    code="LEARNER_CREATE_FAILED",
+                    details={"reason": str(e)},
+                ).model_dump(),
             ) from e
     return LearnerCreateResponse(learner_id=learner_id, grade=request.grade)
 
@@ -59,12 +65,17 @@ async def create_learner(request: LearnerCreateRequest, db=Depends(get_db)):
 async def get_learner(learner_id: UUID, db=Depends(get_db)):
     """Retrieve pseudonymous learner profile by UUID."""
     async with AsyncSessionFactory() as session:
-        result = await session.execute(text("SELECT * FROM learners WHERE learner_id = :id"), {"id": str(learner_id)})
+        result = await session.execute(
+            text("SELECT * FROM learners WHERE learner_id = :id"),
+            {"id": str(learner_id)},
+        )
         row = result.mappings().first()
         if not row:
             raise HTTPException(
                 status_code=404,
-                detail=ErrorResponse(error="Learner not found", code="LEARNER_NOT_FOUND").model_dump(),
+                detail=ErrorResponse(
+                    error="Learner not found", code="LEARNER_NOT_FOUND"
+                ).model_dump(),
             )
         return dict(row)
 
@@ -74,18 +85,27 @@ async def get_learner(learner_id: UUID, db=Depends(get_db)):
     response_model=LearnerUpdateResponse,
     responses={400: {"model": ErrorResponse}},
 )
-async def update_learner(learner_id: UUID, request: LearnerUpdateRequest, db=Depends(get_db)):
+async def update_learner(
+    learner_id: UUID, request: LearnerUpdateRequest, db=Depends(get_db)
+):
     """Update learner profile fields."""
     updates = {k: v for k, v in request.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(
             status_code=400,
-            detail=ErrorResponse(error="No fields to update", code="EMPTY_UPDATE").model_dump(),
+            detail=ErrorResponse(
+                error="No fields to update", code="EMPTY_UPDATE"
+            ).model_dump(),
         )
     set_clause = ", ".join([f"{k} = :{k}" for k in updates])
     updates["id"] = str(learner_id)
     async with AsyncSessionFactory() as session:
-        await session.execute(text(f"UPDATE learners SET {set_clause}, last_active_at = NOW() WHERE learner_id = :id"), updates)
+        await session.execute(
+            text(
+                f"UPDATE learners SET {set_clause}, last_active_at = NOW() WHERE learner_id = :id"
+            ),
+            updates,
+        )
         await session.commit()
     return LearnerUpdateResponse(updated=True)
 
@@ -118,7 +138,10 @@ async def request_data_deletion(learner_id: UUID, db=Depends(get_db)):
 async def get_subject_mastery(learner_id: UUID, db=Depends(get_db)):
     """Retrieve subject mastery scores for a learner."""
     async with AsyncSessionFactory() as session:
-        result = await session.execute(text("SELECT * FROM subject_mastery WHERE learner_id = :id"), {"id": str(learner_id)})
+        result = await session.execute(
+            text("SELECT * FROM subject_mastery WHERE learner_id = :id"),
+            {"id": str(learner_id)},
+        )
         rows = result.mappings().all()
         return SubjectMasteryResponse(
             learner_id=learner_id,
@@ -126,7 +149,11 @@ async def get_subject_mastery(learner_id: UUID, db=Depends(get_db)):
         )
 
 
-@router.post("/{learner_id}/mastery", status_code=status.HTTP_200_OK, response_model=SubjectMasteryResponse)
+@router.post(
+    "/{learner_id}/mastery",
+    status_code=status.HTTP_200_OK,
+    response_model=SubjectMasteryResponse,
+)
 async def upsert_subject_mastery(
     learner_id: UUID,
     request: SubjectMasteryEntry,
@@ -138,14 +165,16 @@ async def upsert_subject_mastery(
             # Check if learner exists
             learner_check = await session.execute(
                 text("SELECT learner_id FROM learners WHERE learner_id = :id"),
-                {"id": str(learner_id)}
+                {"id": str(learner_id)},
             )
             if not learner_check.scalar_one_or_none():
                 raise HTTPException(
                     status_code=404,
-                    detail=ErrorResponse(error="Learner not found", code="LEARNER_NOT_FOUND").model_dump(),
+                    detail=ErrorResponse(
+                        error="Learner not found", code="LEARNER_NOT_FOUND"
+                    ).model_dump(),
                 )
-            
+
             # Check if mastery entry exists for this subject
             existing = await session.execute(
                 text("""
@@ -155,14 +184,17 @@ async def upsert_subject_mastery(
                 {"learner_id": str(learner_id), "subject_code": request.subject_code},
             )
             existing_id = existing.scalar_one_or_none()
-            
+
             if existing_id:
                 # Update existing entry
                 import json
+
                 concepts_mastered_json = json.dumps(request.concepts_mastered or [])
-                concepts_in_progress_json = json.dumps(request.concepts_in_progress or [])
+                concepts_in_progress_json = json.dumps(
+                    request.concepts_in_progress or []
+                )
                 knowledge_gaps_json = json.dumps(request.knowledge_gaps or [])
-                
+
                 await session.execute(
                     text("""
                         UPDATE subject_mastery
@@ -185,10 +217,13 @@ async def upsert_subject_mastery(
             else:
                 # Insert new entry
                 import json
+
                 concepts_mastered_json = json.dumps(request.concepts_mastered or [])
-                concepts_in_progress_json = json.dumps(request.concepts_in_progress or [])
+                concepts_in_progress_json = json.dumps(
+                    request.concepts_in_progress or []
+                )
                 knowledge_gaps_json = json.dumps(request.knowledge_gaps or [])
-                
+
                 await session.execute(
                     text("""
                         INSERT INTO subject_mastery
@@ -198,7 +233,9 @@ async def upsert_subject_mastery(
                                 :concepts_mastered, :concepts_in_progress, :knowledge_gaps, NOW())
                     """),
                     {
-                        "mastery_id": str(UUID(int=0)),  # Will be replaced by gen_random_uuid() default
+                        "mastery_id": str(
+                            UUID(int=0)
+                        ),  # Will be replaced by gen_random_uuid() default
                         "learner_id": str(learner_id),
                         "subject_code": request.subject_code,
                         "grade_level": request.grade_level or 0,
@@ -208,13 +245,13 @@ async def upsert_subject_mastery(
                         "knowledge_gaps": knowledge_gaps_json,
                     },
                 )
-            
+
             await session.commit()
-            
+
             # Fetch updated/created entry
             result = await session.execute(
                 text("SELECT * FROM subject_mastery WHERE learner_id = :id"),
-                {"id": str(learner_id)}
+                {"id": str(learner_id)},
             )
             rows = result.mappings().all()
             return SubjectMasteryResponse(
@@ -226,7 +263,11 @@ async def upsert_subject_mastery(
         except Exception as e:
             raise HTTPException(
                 status_code=500,
-                detail=ErrorResponse(error="Failed to upsert mastery entry", code="MASTERY_UPSERT_FAILED", details={"reason": str(e)}).model_dump(),
+                detail=ErrorResponse(
+                    error="Failed to upsert mastery entry",
+                    code="MASTERY_UPSERT_FAILED",
+                    details={"reason": str(e)},
+                ).model_dump(),
             ) from e
 
 
@@ -234,7 +275,7 @@ async def upsert_subject_mastery(
 async def get_learner_progress(learner_id: UUID, db=Depends(get_db)):
     """
     Retrieve learner's session event summary.
-    
+
     Returns:
     - Total lessons completed
     - Total time on task (ms)
@@ -246,17 +287,21 @@ async def get_learner_progress(learner_id: UUID, db=Depends(get_db)):
         try:
             # Check learner exists
             learner_result = await session.execute(
-                text("SELECT learner_id, total_xp, streak_days FROM learners WHERE learner_id = :id"),
-                {"id": str(learner_id)}
+                text(
+                    "SELECT learner_id, total_xp, streak_days FROM learners WHERE learner_id = :id"
+                ),
+                {"id": str(learner_id)},
             )
             learner = learner_result.mappings().first()
-            
+
             if not learner:
                 raise HTTPException(
                     status_code=404,
-                    detail=ErrorResponse(error="Learner not found", code="LEARNER_NOT_FOUND").model_dump(),
+                    detail=ErrorResponse(
+                        error="Learner not found", code="LEARNER_NOT_FOUND"
+                    ).model_dump(),
                 )
-            
+
             # Get session event summary
             summary_result = await session.execute(
                 text("""
@@ -270,10 +315,10 @@ async def get_learner_progress(learner_id: UUID, db=Depends(get_db)):
                     FROM session_events
                     WHERE learner_id = :learner_id
                 """),
-                {"learner_id": str(learner_id)}
+                {"learner_id": str(learner_id)},
             )
             summary = summary_result.mappings().first()
-            
+
             # Get recent events (last 20)
             recent_result = await session.execute(
                 text("""
@@ -284,33 +329,39 @@ async def get_learner_progress(learner_id: UUID, db=Depends(get_db)):
                     ORDER BY occurred_at DESC
                     LIMIT 20
                 """),
-                {"learner_id": str(learner_id)}
+                {"learner_id": str(learner_id)},
             )
             recent_events = [dict(r) for r in recent_result.mappings().all()]
-            
+
             # Calculate level from XP
-            level = (learner['total_xp'] // 100) + 1
-            xp_in_current_level = learner['total_xp'] % 100
+            level = (learner["total_xp"] // 100) + 1
+            xp_in_current_level = learner["total_xp"] % 100
             xp_to_next_level = 100 - xp_in_current_level
-            
+
             return {
                 "success": True,
                 "learner_id": str(learner_id),
-                "current_xp": learner['total_xp'],
+                "current_xp": learner["total_xp"],
                 "current_level": level,
                 "xp_in_level": xp_in_current_level,
                 "xp_to_next_level": xp_to_next_level,
-                "streak_days": learner['streak_days'],
+                "streak_days": learner["streak_days"],
                 "summary": {
-                    "total_events": summary['total_events'] or 0,
-                    "lessons_completed": summary['lessons_completed'] or 0,
-                    "total_time_ms": summary['total_time_ms'] or 0,
-                    "unique_sessions": summary['unique_sessions'] or 0,
-                    "correct_responses": summary['correct_responses'] or 0,
-                    "incorrect_responses": summary['incorrect_responses'] or 0,
+                    "total_events": summary["total_events"] or 0,
+                    "lessons_completed": summary["lessons_completed"] or 0,
+                    "total_time_ms": summary["total_time_ms"] or 0,
+                    "unique_sessions": summary["unique_sessions"] or 0,
+                    "correct_responses": summary["correct_responses"] or 0,
+                    "incorrect_responses": summary["incorrect_responses"] or 0,
                     "accuracy": (
-                        (summary['correct_responses'] or 0) / ((summary['correct_responses'] or 0) + (summary['incorrect_responses'] or 0))
-                        if (summary['correct_responses'] or 0) + (summary['incorrect_responses'] or 0) > 0
+                        (summary["correct_responses"] or 0)
+                        / (
+                            (summary["correct_responses"] or 0)
+                            + (summary["incorrect_responses"] or 0)
+                        )
+                        if (summary["correct_responses"] or 0)
+                        + (summary["incorrect_responses"] or 0)
+                        > 0
                         else None
                     ),
                 },
@@ -321,5 +372,9 @@ async def get_learner_progress(learner_id: UUID, db=Depends(get_db)):
         except Exception as e:
             raise HTTPException(
                 status_code=500,
-                detail=ErrorResponse(error="Failed to retrieve progress", code="PROGRESS_RETRIEVAL_FAILED", details={"reason": str(e)}).model_dump(),
+                detail=ErrorResponse(
+                    error="Failed to retrieve progress",
+                    code="PROGRESS_RETRIEVAL_FAILED",
+                    details={"reason": str(e)},
+                ).model_dump(),
             ) from e

@@ -1,6 +1,7 @@
 """
 EduBoost SA — FastAPI Application Entrypoint
 """
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +15,18 @@ from slowapi.errors import RateLimitExceeded
 from app.api.core.config import settings
 from app.api.core.database import init_test_schema
 from app.api.services.dummy_data_service import dummy_data_service
-from app.api.routers import health, learners, lessons, diagnostic, study_plans, parent, auth, system, gamification, audit
+from app.api.routers import (
+    health,
+    learners,
+    lessons,
+    diagnostic,
+    study_plans,
+    parent,
+    auth,
+    system,
+    gamification,
+    audit,
+)
 from app.api.routers import assessments
 
 limiter = Limiter(key_func=get_remote_address)
@@ -26,43 +38,53 @@ log = structlog.get_logger()
 # Rate Limiting Middleware
 # ============================================================================
 
+
 class RateLimitMiddleware:
     """Simple in-memory rate limiter middleware."""
-    
+
     def __init__(self, app, requests_per_minute: int = 60):
         self.app = app
         self.requests_per_minute = requests_per_minute
         self._requests: dict[str, list[float]] = {}
-    
+
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        
+
         # Get client IP
         client_ip = scope.get("client", ("unknown", 0))[0]
-        
+
         import time
+
         now = time.time()
         minute_ago = now - 60
-        
+
         # Clean old requests and count recent ones
         if client_ip in self._requests:
-            self._requests[client_ip] = [t for t in self._requests[client_ip] if t > minute_ago]
+            self._requests[client_ip] = [
+                t for t in self._requests[client_ip] if t > minute_ago
+            ]
         else:
             self._requests[client_ip] = []
-        
+
         # Check rate limit
         if len(self._requests[client_ip]) >= self.requests_per_minute:
             # Rate limited - return 429
             response = b'HTTP/1.1 429 Too Many Requests\r\nContent-Type: application/json\r\n\r\n{"detail":{"error":"Rate limit exceeded","code":"RATE_LIMIT_EXCEEDED"}}'
-            await send({"type": "http.response.start", "status": 429, "headers": [[b"content-type", b"application/json"]]})
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 429,
+                    "headers": [[b"content-type", b"application/json"]],
+                }
+            )
             await send({"type": "http.response.body", "body": response})
             return
-        
+
         # Record this request
         self._requests[client_ip].append(now)
-        
+
         await self.app(scope, receive, send)
 
 
@@ -73,11 +95,14 @@ async def lifespan(app: FastAPI):
         # Enable sqlite-backed, dockerless integration tests.
         await init_test_schema()
     else:
-        log.info("DB schema management is migration-driven; runtime auto-create is disabled")
+        log.info(
+            "DB schema management is migration-driven; runtime auto-create is disabled"
+        )
 
     # Post-startup background dummy data generation (must not block startup).
     if settings.DUMMY_DATA_ENABLED and settings.APP_ENV != "test":
         import asyncio
+
         asyncio.create_task(dummy_data_service.run_startup_generation())
     yield
     log.info("EduBoost SA API shutting down")
@@ -86,6 +111,7 @@ async def lifespan(app: FastAPI):
 # ── Sentry (production only) ─────────────────────────────────────────────────
 if settings.SENTRY_DSN and settings.APP_ENV == "production":
     import sentry_sdk
+
     sentry_sdk.init(dsn=settings.SENTRY_DSN, traces_sample_rate=0.1)
 
 app = FastAPI(
@@ -116,24 +142,30 @@ app.state.limiter = limiter
 
 # Add rate limit exception handler
 
+
 @app.exception_handler(RateLimitExceeded)
 async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
         status_code=429,
-        content={"detail": {"error": "Rate limit exceeded", "code": "RATE_LIMIT_EXCEEDED"}}
+        content={
+            "detail": {"error": "Rate limit exceeded", "code": "RATE_LIMIT_EXCEEDED"}
+        },
     )
+
 
 # ── Prometheus metrics ────────────────────────────────────────────────────────
 if settings.PROMETHEUS_ENABLED:
     try:
         from prometheus_fastapi_instrumentator import Instrumentator
         from app.api.core.metrics import METRICS_AVAILABLE
-        
+
         Instrumentator().instrument(app).expose(app)
         if METRICS_AVAILABLE:
             log.info("Custom application metrics initialized")
         else:
-            log.warning("Custom metrics running in no-op mode (prometheus_client missing)")
+            log.warning(
+                "Custom metrics running in no-op mode (prometheus_client missing)"
+            )
     except ImportError:
         log.warning("prometheus_fastapi_instrumentator not installed, skipping metrics")
 
@@ -143,9 +175,15 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(learners.router, prefix="/api/v1/learners", tags=["Learners"])
 app.include_router(lessons.router, prefix="/api/v1/lessons", tags=["Lessons"])
 app.include_router(diagnostic.router, prefix="/api/v1/diagnostic", tags=["Diagnostic"])
-app.include_router(study_plans.router, prefix="/api/v1/study-plans", tags=["Study Plans"])
+app.include_router(
+    study_plans.router, prefix="/api/v1/study-plans", tags=["Study Plans"]
+)
 app.include_router(parent.router, prefix="/api/v1/parent", tags=["Parent Portal"])
-app.include_router(gamification.router, prefix="/api/v1/gamification", tags=["Gamification"])
+app.include_router(
+    gamification.router, prefix="/api/v1/gamification", tags=["Gamification"]
+)
 app.include_router(audit.router, prefix="/api/v1/audit", tags=["Audit"])
-app.include_router(assessments.router, prefix="/api/v1/assessments", tags=["Assessments"])
+app.include_router(
+    assessments.router, prefix="/api/v1/assessments", tags=["Assessments"]
+)
 app.include_router(system.router, prefix="/api/v1/system", tags=["System"])

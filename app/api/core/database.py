@@ -1,6 +1,7 @@
 """
 EduBoost SA — Async Database Engine & Session Factory
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,7 +27,9 @@ else:
         pool_pre_ping=True,
     )
 
-AsyncSessionFactory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+AsyncSessionFactory = async_sessionmaker(
+    engine, expire_on_commit=False, class_=AsyncSession
+)
 _schema_initialized = False
 _schema_lock = asyncio.Lock()
 

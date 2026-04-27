@@ -8,11 +8,17 @@ block the FastAPI event loop.
 
 Supports offline-capable inference mode for low-connectivity deployments.
 """
+
 import os
 import json
 import structlog
 from typing import Any, Optional
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 import httpx
 from groq import AsyncGroq
@@ -35,7 +41,9 @@ _groq_client: Optional[AsyncGroq] = (
     AsyncGroq(api_key=settings.GROQ_API_KEY) if settings.GROQ_API_KEY else None
 )
 _anthropic_client: Optional[AsyncAnthropic] = (
-    AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY) if settings.ANTHROPIC_API_KEY else None
+    AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    if settings.ANTHROPIC_API_KEY
+    else None
 )
 
 
@@ -86,7 +94,9 @@ async def _call_anthropic(system_prompt: str, user_prompt: str, max_tokens: int)
     return response.content[0].text
 
 
-async def _call_huggingface(system_prompt: str, user_prompt: str, max_tokens: int) -> str:
+async def _call_huggingface(
+    system_prompt: str, user_prompt: str, max_tokens: int
+) -> str:
     prompt = f"<|system|>\n{system_prompt}\n<|user|>\n{user_prompt}\n<|assistant|>"
     async with httpx.AsyncClient(timeout=60) as client:
         response = await client.post(
@@ -96,35 +106,45 @@ async def _call_huggingface(system_prompt: str, user_prompt: str, max_tokens: in
         )
         response.raise_for_status()
         result = response.json()
-        generated = result[0]["generated_text"] if isinstance(result, list) else result.get("generated_text", "")
+        generated = (
+            result[0]["generated_text"]
+            if isinstance(result, list)
+            else result.get("generated_text", "")
+        )
         if "<|assistant|>" in generated:
             generated = generated.split("<|assistant|>")[-1].strip()
         return generated
 
 
-async def _call_offline_inference(system_prompt: str, user_prompt: str, max_tokens: int) -> str:
+async def _call_offline_inference(
+    system_prompt: str, user_prompt: str, max_tokens: int
+) -> str:
     """
     Offline-capable inference using local model.
-    
+
     Uses a local model for low-connectivity deployments.
     Supports quantized nano models (e.g., TinyLlama, Phi-2).
     """
     global _offline_client
-    
+
     try:
         # Try to use transformers pipeline for local inference
         from transformers import pipeline, AutoTokenizer, AutoModelForCausalLM
         import torch
-        
-        model_name = os.environ.get("EDUBOOST_OFFLINE_MODEL_NAME", "TinyLlama/TinyLlama-1.1B-Chat-v1.0")
-        
+
+        model_name = os.environ.get(
+            "EDUBOOST_OFFLINE_MODEL_NAME", "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+        )
+
         # Initialize pipeline on first call
         if _offline_client is None:
             log.info("inference_gateway.offline.init", model=model_name)
             tokenizer = AutoTokenizer.from_pretrained(model_name)
             model = AutoModelForCausalLM.from_pretrained(
                 model_name,
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+                torch_dtype=torch.float16
+                if torch.cuda.is_available()
+                else torch.float32,
                 device_map="auto" if torch.cuda.is_available() else "cpu",
             )
             _offline_client = pipeline(
@@ -135,23 +155,27 @@ async def _call_offline_inference(system_prompt: str, user_prompt: str, max_toke
                 temperature=0.7,
                 top_p=0.9,
             )
-        
+
         # Format prompt for chat models
-        prompt = f"<|system|>{system_prompt}</s>\n<|user|>{user_prompt}</s>\n<|assistant|>"
-        
+        prompt = (
+            f"<|system|>{system_prompt}</s>\n<|user|>{user_prompt}</s>\n<|assistant|>"
+        )
+
         result = _offline_client(prompt)
         generated = result[0]["generated_text"]
-        
+
         # Extract assistant response
         if "<|assistant|>" in generated:
             generated = generated.split("<|assistant|>")[-1].strip()
-        
+
         log.info("inference_gateway.offline.success", model=model_name)
         return generated
-        
+
     except ImportError as e:
         log.error("inference_gateway.offline.import_error", error=str(e))
-        raise RuntimeError("Offline inference requires transformers and torch packages") from e
+        raise RuntimeError(
+            "Offline inference requires transformers and torch packages"
+        ) from e
     except Exception as e:
         log.error("inference_gateway.offline.failed", error=str(e))
         raise RuntimeError(f"Offline inference failed: {e}") from e
@@ -176,7 +200,9 @@ async def call_llm(
     clean_system = scrub_pii(system_prompt)
     clean_user = scrub_pii(user_prompt)
 
-    log.info("inference_gateway.call", max_tokens=max_tokens, offline_mode=_OFFLINE_MODE)
+    log.info(
+        "inference_gateway.call", max_tokens=max_tokens, offline_mode=_OFFLINE_MODE
+    )
 
     # Check for offline mode first
     if _OFFLINE_MODE:
@@ -187,7 +213,7 @@ async def call_llm(
         except Exception as e:
             log.error("inference_gateway.offline_failed", error=str(e))
             # Fall through to online providers if offline fails
-    
+
     # 1. Try Groq (primary — ultra fast)
     try:
         result = await _call_groq(clean_system, clean_user, max_tokens)

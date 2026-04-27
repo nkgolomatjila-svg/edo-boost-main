@@ -6,7 +6,11 @@ router = APIRouter()
 
 @router.get("/health")
 async def health():
-    return {"status": "ok", "service": "EduBoost SA API", "timestamp": datetime.utcnow().isoformat()}
+    return {
+        "status": "ok",
+        "service": "EduBoost SA API",
+        "timestamp": datetime.utcnow().isoformat(),
+    }
 
 
 @router.get("/")

@@ -3,6 +3,7 @@ EduBoost SA — Audit Event Emission Helpers
 
 Utility functions for emitting audit events on protected mutations.
 """
+
 from uuid import UUID
 from datetime import datetime
 from typing import Optional
@@ -25,7 +26,7 @@ async def emit_audit_event(
 ) -> None:
     """
     Emit an audit event to the database.
-    
+
     Args:
         session: AsyncSession for database writes
         event_type: Type of event (e.g., "LESSON_GENERATED", "CONSENT_RECORDED", "DELETION_REQUESTED")
@@ -39,7 +40,7 @@ async def emit_audit_event(
     try:
         from app.api.models.db_models import AuditEvent
         from uuid import uuid4
-        
+
         event = AuditEvent(
             event_id=uuid4(),
             event_type=event_type,
@@ -51,10 +52,10 @@ async def emit_audit_event(
             details=details or {},
             occurred_at=datetime.utcnow(),
         )
-        
+
         session.add(event)
         await session.flush()
-        
+
         log.info(
             "audit.event_emitted",
             event_type=event_type,

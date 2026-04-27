@@ -7,6 +7,7 @@ Includes:
 - Celery Beat scheduled tasks
 - Task lifecycle hooks for observability
 """
+
 from celery import Celery, signals
 from celery.schedules import crontab
 
@@ -33,15 +34,13 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="Africa/Johannesburg",
     enable_utc=True,
-
     # ── Retry & Dead-Letter ────────────────────────────────────────────────
-    task_acks_late=True,                    # Acknowledge after completion
-    task_reject_on_worker_lost=True,        # Requeue if worker crashes
-    task_default_retry_delay=30,            # 30s between retries
-    task_max_retries=3,                     # Max 3 retries
-    task_time_limit=600,                    # Hard limit: 10 minutes
-    task_soft_time_limit=300,               # Soft limit: 5 minutes
-
+    task_acks_late=True,  # Acknowledge after completion
+    task_reject_on_worker_lost=True,  # Requeue if worker crashes
+    task_default_retry_delay=30,  # 30s between retries
+    task_max_retries=3,  # Max 3 retries
+    task_time_limit=600,  # Hard limit: 10 minutes
+    task_soft_time_limit=300,  # Soft limit: 5 minutes
     # ── Priority Queues ────────────────────────────────────────────────────
     task_default_queue="default",
     task_queues={
@@ -54,13 +53,11 @@ celery_app.conf.update(
         "eduboost.tasks.generate_report": {"queue": "batch"},
         "eduboost.health.ping": {"queue": "default"},
     },
-
     # ── Result Backend ─────────────────────────────────────────────────────
-    result_expires=3600,                    # Results expire after 1 hour
-
+    result_expires=3600,  # Results expire after 1 hour
     # ── Worker Settings ────────────────────────────────────────────────────
-    worker_prefetch_multiplier=1,           # Fair scheduling
-    worker_concurrency=4,                   # 4 concurrent tasks per worker
+    worker_prefetch_multiplier=1,  # Fair scheduling
+    worker_concurrency=4,  # 4 concurrent tasks per worker
 )
 
 # ── Celery Beat Schedule ───────────────────────────────────────────────────────
@@ -72,7 +69,9 @@ celery_app.conf.beat_schedule = {
     },
     "weekly-parent-reports": {
         "task": "eduboost.tasks.weekly_parent_reports",
-        "schedule": crontab(hour=8, minute=0, day_of_week="monday"),  # Monday 08:00 SAST
+        "schedule": crontab(
+            hour=8, minute=0, day_of_week="monday"
+        ),  # Monday 08:00 SAST
         "options": {"queue": "batch"},
     },
     "health-ping": {
@@ -84,8 +83,11 @@ celery_app.conf.beat_schedule = {
 
 # ── Task Lifecycle Hooks (Observability) ───────────────────────────────────────
 
+
 @signals.task_prerun.connect
-def task_prerun_handler(sender=None, task_id=None, task=None, args=None, kwargs=None, **kw):
+def task_prerun_handler(
+    sender=None, task_id=None, task=None, args=None, kwargs=None, **kw
+):
     log.info(
         "celery.task.started",
         task_name=sender.name if sender else "unknown",
@@ -94,7 +96,9 @@ def task_prerun_handler(sender=None, task_id=None, task=None, args=None, kwargs=
 
 
 @signals.task_postrun.connect
-def task_postrun_handler(sender=None, task_id=None, task=None, retval=None, state=None, **kw):
+def task_postrun_handler(
+    sender=None, task_id=None, task=None, retval=None, state=None, **kw
+):
     log.info(
         "celery.task.completed",
         task_name=sender.name if sender else "unknown",
@@ -104,7 +108,9 @@ def task_postrun_handler(sender=None, task_id=None, task=None, retval=None, stat
 
 
 @signals.task_failure.connect
-def task_failure_handler(sender=None, task_id=None, exception=None, traceback=None, **kw):
+def task_failure_handler(
+    sender=None, task_id=None, exception=None, traceback=None, **kw
+):
     log.error(
         "celery.task.failed",
         task_name=sender.name if sender else "unknown",
@@ -124,6 +130,7 @@ def task_retry_handler(sender=None, request=None, reason=None, **kw):
 
 
 # ── Health Check Task ──────────────────────────────────────────────────────────
+
 
 @celery_app.task(name="eduboost.health.ping")
 def ping() -> str:

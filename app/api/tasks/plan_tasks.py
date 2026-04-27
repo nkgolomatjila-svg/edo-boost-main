@@ -1,4 +1,5 @@
 """Celery background tasks for study plan generation and auto-linkage."""
+
 import asyncio
 
 from celery.utils.log import get_task_logger
@@ -22,17 +23,19 @@ async def _refresh_study_plan(learner_id: str):
                 ORDER BY completed_at DESC
                 LIMIT 1
             """),
-            {"learner_id": learner_id}
+            {"learner_id": learner_id},
         )
         row = result.mappings().first()
 
     if not row:
-        logger.warning(f"No completed diagnostic sessions found for learner {learner_id}")
+        logger.warning(
+            f"No completed diagnostic sessions found for learner {learner_id}"
+        )
         return
 
     grade = row["grade_level"]
     knowledge_gaps = row["knowledge_gaps"] or []
-    
+
     # 2. Fetch subject mastery
     async with AsyncSessionFactory() as session:
         result = await session.execute(
@@ -41,14 +44,17 @@ async def _refresh_study_plan(learner_id: str):
                 FROM subject_mastery
                 WHERE learner_id = :learner_id
             """),
-            {"learner_id": learner_id}
+            {"learner_id": learner_id},
         )
         mastery_rows = result.mappings().all()
-    
-    subjects_mastery = {r["subject_code"]: round(r["mastery_score"] * 100) for r in mastery_rows}
+
+    subjects_mastery = {
+        r["subject_code"]: round(r["mastery_score"] * 100) for r in mastery_rows
+    }
 
     # 3. Generate the plan via Orchestrator (handles constitutional review, profiling, audit)
     from app.api.orchestrator import get_orchestrator, OrchestratorRequest
+
     orch = get_orchestrator()
     result = await orch.run(
         OrchestratorRequest(
@@ -70,6 +76,7 @@ async def _refresh_study_plan(learner_id: str):
 
     # 4. Persist the plan to DB
     import json
+
     async with AsyncSessionFactory() as session:
         await session.execute(
             text("""
@@ -81,8 +88,10 @@ async def _refresh_study_plan(learner_id: str):
                 "target_grade": grade,
                 "focus_areas": json.dumps(knowledge_gaps),
                 "schedule": json.dumps(plan_data.get("days", {})),
-                "rationale": plan_data.get("week_focus", "Auto-generated after diagnostic."),
-            }
+                "rationale": plan_data.get(
+                    "week_focus", "Auto-generated after diagnostic."
+                ),
+            },
         )
         await session.commit()
     logger.info(f"Successfully refreshed study plan for learner {learner_id}")
@@ -100,7 +109,9 @@ def refresh_study_plan_task(self, learner_id_str: str) -> str:
     Celery task to automatically generate a new study plan after a diagnostic session.
     Retries up to 3 times on transient failures.
     """
-    logger.info(f"Starting auto-linkage study plan refresh for learner: {learner_id_str}")
+    logger.info(
+        f"Starting auto-linkage study plan refresh for learner: {learner_id_str}"
+    )
     try:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -155,4 +166,3 @@ async def _daily_plan_refresh_all():
             await _refresh_study_plan(lid)
         except Exception as e:
             logger.error(f"Daily refresh failed for learner {lid}: {e}")
-

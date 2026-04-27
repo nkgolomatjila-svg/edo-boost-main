@@ -1,4 +1,5 @@
 """EduBoost SA — Constitutional schema (Legislature + shared contracts)."""
+
 from app.api.constitutional_schema.types import (
     RuleCategory,
     RuleSeverity,

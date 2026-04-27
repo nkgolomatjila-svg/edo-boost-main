@@ -3,6 +3,7 @@ EduBoost SA — IRT Adaptive Engine
 Computerised Adaptive Testing using 2-Parameter Logistic (2PL) IRT model.
 Finds the learner's exact knowledge floor via gap-probe cascade.
 """
+
 import math
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict
@@ -60,13 +61,14 @@ class AssessmentSession:
 
 # ── IRT Core Functions ────────────────────────────────────────────────────────
 
+
 def p_correct(theta: float, a: float, b: float) -> float:
     return 1.0 / (1.0 + math.exp(-a * (theta - b)))
 
 
 def fisher_information(theta: float, a: float, b: float) -> float:
     p = p_correct(theta, a, b)
-    return (a ** 2) * p * (1 - p)
+    return (a**2) * p * (1 - p)
 
 
 def update_theta_mle(responses: List[Response], items: Dict[str, Item]) -> tuple:
@@ -88,7 +90,9 @@ def update_theta_mle(responses: List[Response], items: Dict[str, Item]) -> tuple
     theta_hat = result.x
 
     total_info = sum(
-        fisher_information(theta_hat, items[r.item_id].discrimination_a, items[r.item_id].difficulty_b)
+        fisher_information(
+            theta_hat, items[r.item_id].discrimination_a, items[r.item_id].difficulty_b
+        )
         for r in responses
         if r.item_id in items
     )
@@ -102,14 +106,20 @@ def select_next_item(
     administered_ids: set,
 ) -> Optional[Item]:
     eligible = [
-        item for item in available_items
+        item
+        for item in available_items
         if item.item_id not in administered_ids
         and item.grade == session.current_grade
         and item.subject == session.subject
     ]
     if not eligible:
         return None
-    return max(eligible, key=lambda item: fisher_information(session.theta, item.discrimination_a, item.difficulty_b))
+    return max(
+        eligible,
+        key=lambda item: fisher_information(
+            session.theta, item.discrimination_a, item.difficulty_b
+        ),
+    )
 
 
 def should_stop(session: AssessmentSession, max_questions: int = 20) -> bool:
@@ -159,46 +169,136 @@ def build_gap_report(session: AssessmentSession) -> dict:
 # ── In-memory item bank ────────────────────────────────────────────────────────
 
 SAMPLE_ITEMS: List[Item] = [
-    Item("GR3_MATH_FRAC_01", SubjectCode.MATH, 3, "GR3_MATH_FRAC",
-         -0.5, 1.2, "Sipho cuts his pizza into 4 equal pieces and eats 1. What fraction did he eat?",
-         ["1/2", "1/4", "1/3", "4/1"], 1,
-         "At the school tuck shop, Sipho buys a small pizza.", "Easy"),
-    Item("GR3_MATH_FRAC_02", SubjectCode.MATH, 3, "GR3_MATH_FRAC",
-         0.3, 1.4, "Ntombi has 12 apples. She takes half. How many does she take?",
-         ["4", "6", "8", "3"], 1,
-         "Gogo has a fruit bowl with 12 apples on the stoep.", "Easy"),
-    Item("GR3_MATH_FRAC_03", SubjectCode.MATH, 3, "GR3_MATH_FRAC",
-         0.9, 1.6, "A chocolate bar has 8 pieces. Thabo eats 2/8 of it. How many pieces?",
-         ["2", "4", "6", "1"], 0,
-         "Thabo bought a Cadbury chocolate at the café.", "Medium"),
-    Item("GR2_MATH_ADD_01", SubjectCode.MATH, 2, "GR2_MATH_ADD",
-         -1.0, 1.1, "What is 15 + 27?",
-         ["42", "41", "43", "40"], 0,
-         "Lindiwe is counting rands in her piggy bank.", "Easy"),
-    Item("GR2_MATH_MULT_01", SubjectCode.MATH, 2, "GR2_MATH_MULT",
-         0.5, 1.3, "What is 9 × 4?",
-         ["36", "32", "38", "34"], 0,
-         "There are 9 tables in the school hall, each with 4 chairs.", "Medium"),
-    Item("GR3_ENG_SPELL_01", SubjectCode.ENG, 3, "GR3_ENG_SPELL",
-         -0.8, 1.2, "Choose the correct spelling:",
-         ["Elefant", "Elephant", "Elephent", "Elifant"], 1,
-         "We're writing a story about animals on the veld.", "Easy"),
-    Item("GR3_ENG_GRAM_01", SubjectCode.ENG, 3, "GR3_ENG_GRAM",
-         0.2, 1.5, "Which word is a noun in: 'The lion ran fast'?",
-         ["ran", "fast", "the", "lion"], 3,
-         "Reading a story about Kruger National Park.", "Medium"),
-    Item("GR3_LIFE_UBU_01", SubjectCode.LIFE, 3, "GR3_LIFE_UBU",
-         -1.2, 1.0, "Ubuntu means:",
-         ["I am strong", "I am because we are", "Work alone", "Be the best"], 1,
-         "Your teacher is teaching about South African values.", "Easy"),
-    Item("GR3_NS_ANIM_01", SubjectCode.NS, 3, "GR3_NS_ANIM",
-         -0.6, 1.1, "Which animal is a herbivore?",
-         ["Lion", "Crocodile", "Elephant", "Shark"], 2,
-         "On a game drive in the Kruger, you spot many animals.", "Easy"),
-    Item("GR3_SS_CAP_01", SubjectCode.SS, 3, "GR3_SS_CAP",
-         0.1, 1.3, "What is the seat of government capital of South Africa?",
-         ["Cape Town", "Johannesburg", "Pretoria", "Durban"], 2,
-         "Learning about our beautiful country.", "Medium"),
+    Item(
+        "GR3_MATH_FRAC_01",
+        SubjectCode.MATH,
+        3,
+        "GR3_MATH_FRAC",
+        -0.5,
+        1.2,
+        "Sipho cuts his pizza into 4 equal pieces and eats 1. What fraction did he eat?",
+        ["1/2", "1/4", "1/3", "4/1"],
+        1,
+        "At the school tuck shop, Sipho buys a small pizza.",
+        "Easy",
+    ),
+    Item(
+        "GR3_MATH_FRAC_02",
+        SubjectCode.MATH,
+        3,
+        "GR3_MATH_FRAC",
+        0.3,
+        1.4,
+        "Ntombi has 12 apples. She takes half. How many does she take?",
+        ["4", "6", "8", "3"],
+        1,
+        "Gogo has a fruit bowl with 12 apples on the stoep.",
+        "Easy",
+    ),
+    Item(
+        "GR3_MATH_FRAC_03",
+        SubjectCode.MATH,
+        3,
+        "GR3_MATH_FRAC",
+        0.9,
+        1.6,
+        "A chocolate bar has 8 pieces. Thabo eats 2/8 of it. How many pieces?",
+        ["2", "4", "6", "1"],
+        0,
+        "Thabo bought a Cadbury chocolate at the café.",
+        "Medium",
+    ),
+    Item(
+        "GR2_MATH_ADD_01",
+        SubjectCode.MATH,
+        2,
+        "GR2_MATH_ADD",
+        -1.0,
+        1.1,
+        "What is 15 + 27?",
+        ["42", "41", "43", "40"],
+        0,
+        "Lindiwe is counting rands in her piggy bank.",
+        "Easy",
+    ),
+    Item(
+        "GR2_MATH_MULT_01",
+        SubjectCode.MATH,
+        2,
+        "GR2_MATH_MULT",
+        0.5,
+        1.3,
+        "What is 9 × 4?",
+        ["36", "32", "38", "34"],
+        0,
+        "There are 9 tables in the school hall, each with 4 chairs.",
+        "Medium",
+    ),
+    Item(
+        "GR3_ENG_SPELL_01",
+        SubjectCode.ENG,
+        3,
+        "GR3_ENG_SPELL",
+        -0.8,
+        1.2,
+        "Choose the correct spelling:",
+        ["Elefant", "Elephant", "Elephent", "Elifant"],
+        1,
+        "We're writing a story about animals on the veld.",
+        "Easy",
+    ),
+    Item(
+        "GR3_ENG_GRAM_01",
+        SubjectCode.ENG,
+        3,
+        "GR3_ENG_GRAM",
+        0.2,
+        1.5,
+        "Which word is a noun in: 'The lion ran fast'?",
+        ["ran", "fast", "the", "lion"],
+        3,
+        "Reading a story about Kruger National Park.",
+        "Medium",
+    ),
+    Item(
+        "GR3_LIFE_UBU_01",
+        SubjectCode.LIFE,
+        3,
+        "GR3_LIFE_UBU",
+        -1.2,
+        1.0,
+        "Ubuntu means:",
+        ["I am strong", "I am because we are", "Work alone", "Be the best"],
+        1,
+        "Your teacher is teaching about South African values.",
+        "Easy",
+    ),
+    Item(
+        "GR3_NS_ANIM_01",
+        SubjectCode.NS,
+        3,
+        "GR3_NS_ANIM",
+        -0.6,
+        1.1,
+        "Which animal is a herbivore?",
+        ["Lion", "Crocodile", "Elephant", "Shark"],
+        2,
+        "On a game drive in the Kruger, you spot many animals.",
+        "Easy",
+    ),
+    Item(
+        "GR3_SS_CAP_01",
+        SubjectCode.SS,
+        3,
+        "GR3_SS_CAP",
+        0.1,
+        1.3,
+        "What is the seat of government capital of South Africa?",
+        ["Cape Town", "Johannesburg", "Pretoria", "Durban"],
+        2,
+        "Learning about our beautiful country.",
+        "Medium",
+    ),
 ]
 
 ITEM_BANK: Dict[str, Item] = {item.item_id: item for item in SAMPLE_ITEMS}

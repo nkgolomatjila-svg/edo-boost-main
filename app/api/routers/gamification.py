@@ -1,4 +1,5 @@
 """EduBoost SA — Gamification Router"""
+
 from uuid import UUID
 from typing import Optional
 
@@ -63,7 +64,9 @@ async def award_xp(request: XPAwardRequest):
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to award XP: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Failed to award XP: {e}"
+            ) from e
 
 
 @router.post("/update-streak", response_model=StreakUpdateResponse)
@@ -80,7 +83,9 @@ async def update_streak(learner_id: UUID):
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to update streak: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Failed to update streak: {e}"
+            ) from e
 
 
 @router.get("/profile/{learner_id}", response_model=LearnerProfileResponse)
@@ -94,7 +99,9 @@ async def get_learner_profile(learner_id: UUID):
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e)) from e
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to get profile: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Failed to get profile: {e}"
+            ) from e
 
 
 @router.get("/leaderboard", response_model=LeaderboardResponse)
@@ -106,4 +113,6 @@ async def get_leaderboard(limit: int = Query(default=10, ge=1, le=100)):
             leaderboard = await service.get_leaderboard(limit=limit)
             return LeaderboardResponse(success=True, leaderboard=leaderboard)
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Failed to get leaderboard: {e}") from e
+            raise HTTPException(
+                status_code=500, detail=f"Failed to get leaderboard: {e}"
+            ) from e
