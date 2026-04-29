@@ -131,6 +131,31 @@ async def generate_lesson_endpoint(request: LessonRequest, _db=Depends(get_db)):
         )
         await session.commit()
 
+    # Cache lesson in Redis (Phase 2, item #10)
+    if result.lesson_id and result.output:
+        try:
+            import json
+            import redis.asyncio as redis_lib
+            from app.api.core.config import settings
+
+            r = redis_lib.from_url(settings.REDIS_URL, decode_responses=True)
+            # Cache for 30 days (2,592,000 seconds)
+            LESSON_CACHE_TTL = 30 * 24 * 60 * 60
+            await r.setex(
+                f"lesson:{result.lesson_id}",
+                LESSON_CACHE_TTL,
+                json.dumps(result.output, default=str)
+            )
+            await r.aclose()
+        except Exception as e:
+            import structlog
+            structlog.get_logger().warning(
+                "lesson.cache_write_failed",
+                lesson_id=result.lesson_id,
+                error=str(e)
+            )
+            # Don't fail the endpoint if caching fails
+
     return LessonGenerationResponse(
         success=True,
         lesson_id=result.lesson_id or "unknown",
